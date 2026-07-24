@@ -1,0 +1,40 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
+import type { ColorValue } from 'react-native';
+
+import { colors } from '@/theme/tokens';
+
+type IconName = keyof typeof Ionicons.glyphMap;
+
+function tabIcon(name: IconName) {
+  return ({ color, size }: { color: ColorValue; size: number }) => (
+    <Ionicons name={name} color={color} size={size} />
+  );
+}
+
+export default function TabsLayout() {
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarShowLabel: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textLo,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
+      }}>
+      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: tabIcon('home') }} />
+      <Tabs.Screen name="stats" options={{ title: 'Stats', tabBarIcon: tabIcon('stats-chart') }} />
+      <Tabs.Screen
+        name="profile"
+        options={{ title: 'Profile', tabBarIcon: tabIcon('person-outline') }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{ title: 'Settings', tabBarIcon: tabIcon('settings-outline') }}
+      />
+    </Tabs>
+  );
+}
