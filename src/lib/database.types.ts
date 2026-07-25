@@ -16,11 +16,12 @@ type UserWordRow = {
   cefr: string | null;
   notes: string | null;
   flagged: boolean;
+  status: string;
   created_at: string;
 };
 
-type UserWordInsert = Omit<UserWordRow, 'id' | 'created_at' | 'flagged'> &
-  Partial<Pick<UserWordRow, 'id' | 'created_at' | 'flagged'>>;
+type UserWordInsert = Omit<UserWordRow, 'id' | 'created_at' | 'flagged' | 'status'> &
+  Partial<Pick<UserWordRow, 'id' | 'created_at' | 'flagged' | 'status'>>;
 
 type LexiconEntryRow = {
   id: string;
@@ -97,6 +98,7 @@ type SrsCardRow = {
   repetitions: number;
   due_at: string;
   last_reviewed: string | null;
+  last_rating: number | null;
 };
 
 type SrsReviewRow = {

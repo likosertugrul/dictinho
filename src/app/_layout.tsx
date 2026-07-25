@@ -38,7 +38,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="word/add" options={{ presentation: 'modal' }} />
           <Stack.Screen name="word/[id]" options={{ presentation: 'modal' }} />
-          {/* Faz 5: srs/index */}
+          <Stack.Screen name="srs/index" options={{ presentation: 'modal' }} />
         </Stack>
       </ThemeProvider>
     </QueryClientProvider>

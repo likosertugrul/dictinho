@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { conjugateRegular } from '@/lib/conjugator';
 import type { Auxiliary, Cefr, Pos, Tense } from '@/lib/italian';
 import { PERSONS } from '@/lib/italian';
-import { userWordSchema, type UserWord } from '@/lib/schemas';
+import { userWordSchema, type UserWord, type WordStatus } from '@/lib/schemas';
 import { ensureSession, getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export interface NewWord {
@@ -16,6 +16,7 @@ export interface NewWord {
   cefr: Cefr | null;
   lexicon_ref: string | null;
   notes: string | null;
+  status: WordStatus;
   /** Verbs only: tenses whose conjugation tables should be attached. */
   tenses: Tense[];
 }
@@ -124,6 +125,7 @@ export function useAddWord() {
           .from('user_words')
           .update({
             translation: fields.translation,
+            status: fields.status, // re-adding can move a word between lists
             // fill in fields the older entry may be missing; keep existing notes
             lexicon_ref: fields.lexicon_ref ?? dup.lexicon_ref,
             auxiliary: fields.auxiliary ?? dup.auxiliary,
@@ -189,6 +191,36 @@ export function useToggleFlag() {
     },
     onError: () => qc.invalidateQueries({ queryKey: ['user-words'] }),
     onSuccess: (saved) => {
+      qc.setQueryData(['user-words', 'detail', saved.id], saved);
+    },
+  });
+}
+
+export function useSetStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: WordStatus }) => {
+      const { data, error } = await getSupabase()
+        .from('user_words')
+        .update({ status })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return userWordSchema.parse(data);
+    },
+    onMutate: async ({ id, status }) => {
+      await qc.cancelQueries({ queryKey: ['user-words'] });
+      qc.setQueriesData<UserWord[]>({ queryKey: ['user-words', 'recent'] }, (old) =>
+        old?.map((w) => (w.id === id ? { ...w, status } : w)),
+      );
+      qc.setQueryData<UserWord>(['user-words', 'detail', id], (old) =>
+        old ? { ...old, status } : old,
+      );
+    },
+    onError: () => qc.invalidateQueries({ queryKey: ['user-words'] }),
+    onSuccess: (saved) => {
+      qc.invalidateQueries({ queryKey: ['user-words'] });
       qc.setQueryData(['user-words', 'detail', saved.id], saved);
     },
   });

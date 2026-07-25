@@ -19,6 +19,7 @@ import { useLexiconSearch, type SearchLang } from '@/hooks/use-lexicon-search';
 import { conjugateRegular } from '@/lib/conjugator';
 import {
   AUXILIARIES,
+  matchesLemma,
   PERSON_LABELS,
   PERSONS,
   POS_VALUES,
@@ -30,7 +31,7 @@ import {
   type Pos,
   type Tense,
 } from '@/lib/italian';
-import type { LexiconSuggestion } from '@/lib/schemas';
+import type { LexiconSuggestion, WordStatus } from '@/lib/schemas';
 import { useAddWord, useLexiconConjugations } from '@/lib/words';
 import { colors } from '@/theme/tokens';
 
@@ -54,6 +55,9 @@ export default function AddWordScreen() {
   // Only Presente is pre-selected; the user can add more tenses per verb
   const [tenses, setTenses] = useState<Tense[]>(['presente']);
 
+  // Which list to file it under
+  const [status, setStatus] = useState<WordStatus>('learning');
+
   // Manual attributes — used when the word isn't in the base lexicon
   const [manualPos, setManualPos] = useState<Pos>('noun');
   const [manualGender, setManualGender] = useState<'m' | 'f' | null>(null);
@@ -61,9 +65,6 @@ export default function AddWordScreen() {
 
   const effectivePos: Pos = selected?.pos ?? manualPos;
   const isVerb = effectivePos === 'verb';
-  // Manual add only makes sense when typing Italian — an unmatched English
-  // query must not become an Italian lemma
-  const isCustom = !selected && searchLang === 'it' && query.trim().length >= 2;
 
   const toggleTense = (t: Tense) =>
     setTenses((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
@@ -89,6 +90,13 @@ export default function AddWordScreen() {
 
   const suggestions = search.data ?? [];
   const showSuggestions = !selected && query.trim().length >= 2 && suggestions.length > 0;
+
+  // Fuzzy search returns near-matches ("laurea" → là, lago…), so "no results"
+  // rarely fires. Offer AI-add / manual entry whenever nothing EXACTLY matches.
+  const hasExactMatch = suggestions.some((s) => matchesLemma(query, s.lemma));
+  const canAddCustom =
+    !selected && searchLang === 'it' && query.trim().length >= 2 && !hasExactMatch;
+  const isCustom = canAddCustom; // manual attribute pickers gate on the same flag
 
   const pick = (s: LexiconSuggestion) => {
     Keyboard.dismiss();
@@ -126,6 +134,7 @@ export default function AddWordScreen() {
         cefr: selected?.cefr ?? null,
         lexicon_ref: selected?.id ?? null,
         notes: notes.trim() || null,
+        status,
         tenses: isVerb ? tenses : [],
       },
       { onSuccess: () => router.back() },
@@ -257,17 +266,24 @@ export default function AddWordScreen() {
             </View>
           )}
 
-          {/* Manual attributes — shown when the word isn't found in the dictionary */}
+          {/* Manual attributes — shown when the typed word isn't an exact match */}
           {isCustom && (
             <>
-              {!search.isFetching && suggestions.length === 0 && (
+              {!search.isFetching && (
                 <>
+                  {suggestions.length > 0 && (
+                    <Text className="mb-2 mt-4 px-1 text-xs text-textLo">
+                      Not the word you meant? Add it directly:
+                    </Text>
+                  )}
                   {/* AI look-up: fills type/meaning/auxiliary + correct conjugations */}
                   <Pressable
                     accessibilityLabel="Add with AI"
                     disabled={enrich.isPending}
                     onPress={runEnrich}
-                    className="mt-3 flex-row items-center justify-center gap-2 rounded-full bg-primary py-3.5">
+                    className={`flex-row items-center justify-center gap-2 rounded-full bg-primary py-3.5 ${
+                      suggestions.length > 0 ? '' : 'mt-3'
+                    }`}>
                     {enrich.isPending ? (
                       <>
                         <ActivityIndicator color={colors.onPrimary} />
@@ -402,6 +418,34 @@ export default function AddWordScreen() {
               })}
             </>
           )}
+
+          {/* Which list */}
+          <Text className="mb-2 mt-6 text-sm font-semibold text-textLo">Add to</Text>
+          <View className="flex-row gap-2">
+            {(
+              [
+                { key: 'learning', label: 'To learn', icon: 'school-outline' },
+                { key: 'known', label: 'Known', icon: 'checkmark-circle-outline' },
+              ] as const
+            ).map(({ key, label, icon }) => (
+              <Pressable
+                key={key}
+                onPress={() => setStatus(key)}
+                className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl py-3 ${
+                  status === key ? 'bg-primary' : 'bg-surface'
+                }`}>
+                <Ionicons
+                  name={icon}
+                  size={16}
+                  color={status === key ? colors.onPrimary : colors.textLo}
+                />
+                <Text
+                  className={`text-sm font-bold ${status === key ? 'text-white' : 'text-textLo'}`}>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
           {/* English meaning */}
           <Text className="mb-2 mt-6 text-sm font-semibold text-textLo">English meaning</Text>

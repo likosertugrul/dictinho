@@ -52,6 +52,52 @@ export default function HomeScreen() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
 
+  // Two separate lists
+  const learningWords = filteredWords.filter((w) => w.status === 'learning');
+  const knownWords = filteredWords.filter((w) => w.status === 'known');
+
+  const renderWordList = (list: typeof filteredWords) => (
+    <View className="overflow-hidden rounded-card bg-surface">
+      {list.map((w, i) => (
+        <Pressable
+          key={w.id}
+          onPress={() => router.push(`/word/${w.id}`)}
+          className={`flex-row items-center justify-between px-4 py-3 ${
+            i > 0 ? 'border-t border-border' : ''
+          }`}>
+          <View className="flex-1 pr-3">
+            <Text className="text-base font-semibold text-textHi">
+              {w.pos === 'noun' ? withArticle(w.lemma, w.gender) : w.lemma}
+            </Text>
+            <Text className="mt-0.5 text-xs text-textLo">{w.translation}</Text>
+          </View>
+          <View className="flex-row items-center gap-1.5">
+            <Pressable
+              accessibilityLabel={w.flagged ? 'Unflag word' : 'Flag for review'}
+              hitSlop={8}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                toggleFlag.mutate({ id: w.id, flagged: !w.flagged });
+              }}
+              className="h-7 w-7 items-center justify-center">
+              <Ionicons
+                name={w.flagged ? 'star' : 'star-outline'}
+                size={16}
+                color={w.flagged ? colors.pastel.yellow : colors.textLo}
+              />
+            </Pressable>
+            {w.auxiliary ? (
+              <View className="rounded-full bg-primary px-2.5 py-0.5">
+                <Text className="text-xs font-semibold text-white">{w.auxiliary}</Text>
+              </View>
+            ) : null}
+            <Ionicons name="chevron-forward" size={16} color={colors.textLo} />
+          </View>
+        </Pressable>
+      ))}
+    </View>
+  );
+
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       {/* Header */}
@@ -186,46 +232,36 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
 
-            <View className="overflow-hidden rounded-card bg-surface">
-              {filteredWords.map((w, i) => (
-                <Pressable
-                  key={w.id}
-                  onPress={() => router.push(`/word/${w.id}`)}
-                  className={`flex-row items-center justify-between px-4 py-3 ${
-                    i > 0 ? 'border-t border-border' : ''
-                  }`}>
-                  <View className="flex-1 pr-3">
-                    <Text className="text-base font-semibold text-textHi">
-                      {w.pos === 'noun' ? withArticle(w.lemma, w.gender) : w.lemma}
-                    </Text>
-                    <Text className="mt-0.5 text-xs text-textLo">{w.translation}</Text>
-                  </View>
-                  <View className="flex-row items-center gap-1.5">
-                    {/* Quick flag toggle */}
-                    <Pressable
-                      accessibilityLabel={w.flagged ? 'Unflag word' : 'Flag for review'}
-                      hitSlop={8}
-                      onPress={(e) => {
-                        e.stopPropagation?.();
-                        toggleFlag.mutate({ id: w.id, flagged: !w.flagged });
-                      }}
-                      className="h-7 w-7 items-center justify-center">
-                      <Ionicons
-                        name={w.flagged ? 'star' : 'star-outline'}
-                        size={16}
-                        color={w.flagged ? colors.pastel.yellow : colors.textLo}
-                      />
-                    </Pressable>
-                    {w.auxiliary ? (
-                      <View className="rounded-full bg-primary px-2.5 py-0.5">
-                        <Text className="text-xs font-semibold text-white">{w.auxiliary}</Text>
-                      </View>
-                    ) : null}
-                    <Ionicons name="chevron-forward" size={16} color={colors.textLo} />
-                  </View>
-                </Pressable>
-              ))}
-            </View>
+            {/* Separate lists: to-learn and known */}
+            {learningWords.length > 0 && (
+              <View className="mb-5">
+                <View className="mb-2 flex-row items-center gap-1.5">
+                  <Ionicons name="school-outline" size={16} color={colors.textLo} />
+                  <Text className="text-sm font-bold text-textHi">
+                    To learn ({learningWords.length})
+                  </Text>
+                </View>
+                {renderWordList(learningWords)}
+              </View>
+            )}
+
+            {knownWords.length > 0 && (
+              <View className="mb-5">
+                <View className="mb-2 flex-row items-center gap-1.5">
+                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.pastel.mint} />
+                  <Text className="text-sm font-bold text-textHi">
+                    Known ({knownWords.length})
+                  </Text>
+                </View>
+                {renderWordList(knownWords)}
+              </View>
+            )}
+
+            {learningWords.length === 0 && knownWords.length === 0 && (
+              <Text className="mt-4 text-center text-sm text-textLo">
+                No words match this filter.
+              </Text>
+            )}
           </View>
         )}
       </ScrollView>

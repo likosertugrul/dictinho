@@ -28,6 +28,7 @@ import {
   useDeleteWord,
   useExamples,
   useRemoveTense,
+  useSetStatus,
   useToggleFlag,
   useUpdateNotes,
   useWord,
@@ -56,6 +57,7 @@ export default function WordDetailScreen() {
   const deleteWord = useDeleteWord();
   const examples = useExamples(word.data);
   const toggleFlag = useToggleFlag();
+  const setStatus = useSetStatus();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // Tenses that actually have saved forms, in canonical order
@@ -158,6 +160,31 @@ export default function WordDetailScreen() {
           className="flex-1"
           contentContainerClassName="px-5 pb-8"
           keyboardShouldPersistTaps="handled">
+          {/* Move between lists */}
+          <View className="mt-1 flex-row gap-2">
+            {(
+              [
+                { key: 'learning', label: 'To learn', icon: 'school-outline' },
+                { key: 'known', label: 'Known', icon: 'checkmark-circle-outline' },
+              ] as const
+            ).map(({ key, label, icon }) => {
+              const active = w.status === key;
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => setStatus.mutate({ id: w.id, status: key })}
+                  className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl py-3 ${
+                    active ? 'bg-primary' : 'bg-surface'
+                  }`}>
+                  <Ionicons name={icon} size={16} color={active ? colors.onPrimary : colors.textLo} />
+                  <Text className={`text-sm font-bold ${active ? 'text-white' : 'text-textLo'}`}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           {/* Conjugation tables */}
           {w.pos === 'verb' && (
             <View className="mt-2">

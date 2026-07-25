@@ -78,3 +78,25 @@ export function withArticle(lemma: string, gender: 'm' | 'f' | null): string {
   if (!article) return lemma;
   return article === "l'" ? `l'${lemma}` : `${article} ${lemma}`;
 }
+
+const ARTICLE_RE = /^(l'|un'|il|lo|la|i|gli|le|un|uno|una)\s+|^(l'|un')/;
+
+/** lowercase, strip accents, drop a leading article, collapse spaces. */
+function normalizeGuess(s: string): string {
+  const base = s
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/\s+/g, ' ');
+  return base.replace(ARTICLE_RE, '').trim();
+}
+
+/**
+ * Lenient answer check for flashcards: accent- and case-insensitive, ignores a
+ * leading article, so "citta", "città", and "la città" all match "città".
+ */
+export function matchesLemma(guess: string, lemma: string): boolean {
+  const g = normalizeGuess(guess);
+  return g.length > 0 && g === normalizeGuess(lemma);
+}

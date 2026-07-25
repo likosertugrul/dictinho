@@ -71,6 +71,8 @@ export const userWordSchema = z.object({
   cefr: cefrSchema.nullable(),
   notes: z.string().nullable(),
   flagged: z.boolean().default(false),
+  status: z.enum(['learning', 'known']).default('learning'),
   created_at: z.string(),
 });
 export type UserWord = z.infer<typeof userWordSchema>;
+export type WordStatus = UserWord['status'];

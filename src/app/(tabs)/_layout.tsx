@@ -26,7 +26,7 @@ export default function TabsLayout() {
         },
       }}>
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: tabIcon('home') }} />
-      <Tabs.Screen name="stats" options={{ title: 'Stats', tabBarIcon: tabIcon('stats-chart') }} />
+      <Tabs.Screen name="stats" options={{ title: 'Practice', tabBarIcon: tabIcon('albums-outline') }} />
       <Tabs.Screen
         name="profile"
         options={{ title: 'Profile', tabBarIcon: tabIcon('person-outline') }}
