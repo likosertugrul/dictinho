@@ -27,6 +27,7 @@ import {
   useConjugations,
   useDeleteWord,
   useExamples,
+  useRecheckConjugations,
   useRemoveTense,
   useSetStatus,
   useToggleFlag,
@@ -54,6 +55,7 @@ export default function WordDetailScreen() {
   const updateNotes = useUpdateNotes();
   const addTenses = useAddTenses();
   const removeTense = useRemoveTense();
+  const recheck = useRecheckConjugations();
   const deleteWord = useDeleteWord();
   const examples = useExamples(word.data);
   const toggleFlag = useToggleFlag();
@@ -188,7 +190,34 @@ export default function WordDetailScreen() {
           {/* Conjugation tables */}
           {w.pos === 'verb' && (
             <View className="mt-2">
-              <Text className="mb-3 text-lg font-bold text-textHi">Conjugation</Text>
+              <View className="mb-3 flex-row items-center justify-between">
+                <Text className="text-lg font-bold text-textHi">Conjugation</Text>
+                {/* Re-check with a stronger AI model (fixes occasional errors) */}
+                {availableTenses.length > 0 && (
+                  <Pressable
+                    accessibilityLabel="Re-check conjugations with AI"
+                    disabled={recheck.isPending}
+                    onPress={() => recheck.mutate(w)}
+                    className="flex-row items-center gap-1 rounded-full bg-surfaceAlt px-3 py-1.5">
+                    {recheck.isPending ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <Ionicons name="sparkles" size={13} color={colors.primary} />
+                    )}
+                    <Text className="text-xs font-bold text-textHi">
+                      {recheck.isPending ? 'Checking…' : 'Re-check with AI'}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+              {recheck.isError && (
+                <Text className="mb-2 text-sm text-primary">{recheck.error.message}</Text>
+              )}
+              {recheck.isSuccess && !recheck.isPending && (
+                <Text className="mb-2 text-xs" style={{ color: colors.pastel.mint }}>
+                  Conjugations refreshed.
+                </Text>
+              )}
 
               {availableTenses.length > 0 && tense && (
                 <>

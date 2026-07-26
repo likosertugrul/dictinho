@@ -160,18 +160,25 @@ export default function SrsScreen() {
             </View>
 
             {!revealed ? (
-              <TextInput
-                value={guess}
-                onChangeText={setGuess}
-                onSubmitEditing={check}
-                placeholder="type the Italian word…"
-                placeholderTextColor={colors.textLo}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoFocus
-                returnKeyType="done"
-                className="mt-6 w-full rounded-2xl bg-surfaceAlt px-4 py-3.5 text-center text-lg text-textHi"
-              />
+              <View className="mt-6 w-full flex-row items-center rounded-2xl bg-surfaceAlt px-4">
+                <TextInput
+                  value={guess}
+                  onChangeText={setGuess}
+                  onSubmitEditing={check}
+                  placeholder="type the Italian word…"
+                  placeholderTextColor={colors.textLo}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoFocus
+                  returnKeyType="done"
+                  className="flex-1 py-3.5 text-center text-lg text-textHi"
+                />
+                {guess.length > 0 && (
+                  <Pressable accessibilityLabel="Clear" hitSlop={8} onPress={() => setGuess('')}>
+                    <Ionicons name="close-circle" size={20} color={colors.textLo} />
+                  </Pressable>
+                )}
+              </View>
             ) : (
               <View className="mt-6 w-full items-center">
                 {/* Result */}

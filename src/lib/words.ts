@@ -318,6 +318,68 @@ export function useExamples(word: UserWord | undefined) {
   });
 }
 
+/**
+ * Re-generate a verb's conjugation tables via AI (stronger model) and replace
+ * the word's existing tenses — the "Re-check with AI" button on the word card.
+ */
+export function useRecheckConjugations() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (word: UserWord) => {
+      const supabase = getSupabase();
+
+      // Which tenses does this word currently have?
+      const { data: have, error: hErr } = await supabase
+        .from('conjugations')
+        .select('tense')
+        .eq('user_word_id', word.id);
+      if (hErr) throw new Error(hErr.message);
+      const tenses = [...new Set((have ?? []).map((r) => r.tense))];
+      if (tenses.length === 0) throw new Error('No tenses to re-check yet.');
+
+      // Fresh tables from the Edge Function
+      const { data, error } = await supabase.functions.invoke('enrich-word', {
+        body: { action: 'conjugate', lemma: word.lemma, auxiliary: word.auxiliary ?? 'avere' },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      const tables = (data?.tenses ?? {}) as Record<string, Record<string, string>>;
+
+      // Replace each existing tense's rows
+      const rows: {
+        user_word_id: string;
+        tense: string;
+        person: string;
+        form: string;
+        is_compound: boolean;
+        source: string;
+      }[] = [];
+      for (const t of tenses) {
+        const forms = tables[t];
+        if (!forms) continue;
+        for (const p of PERSONS) {
+          if (!forms[p]?.trim()) continue;
+          rows.push({
+            user_word_id: word.id,
+            tense: t,
+            person: p,
+            form: forms[p].trim(),
+            is_compound: t === 'passato_prossimo',
+            source: 'ai',
+          });
+        }
+      }
+      if (rows.length === 0) throw new Error('AI returned no usable conjugations.');
+
+      await supabase.from('conjugations').delete().eq('user_word_id', word.id).in('tense', tenses);
+      const { error: insErr } = await supabase.from('conjugations').insert(rows);
+      if (insErr) throw new Error(insErr.message);
+      return word.id;
+    },
+    onSuccess: (wordId) => qc.invalidateQueries({ queryKey: ['conjugations', wordId] }),
+  });
+}
+
 export function useRemoveTense() {
   const qc = useQueryClient();
   return useMutation({

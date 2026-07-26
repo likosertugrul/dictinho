@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { POS_LABELS, POS_VALUES, withArticle, type Pos } from '@/lib/italian';
@@ -22,6 +22,7 @@ export default function HomeScreen() {
   const toggleFlag = useToggleFlag();
   const [posFilter, setPosFilter] = useState<Pos | 'all'>('all');
   const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [listQuery, setListQuery] = useState('');
   const [sortKey, setSortKey] = useState<'recent' | 'alpha'>('recent');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // recent: desc = newest first
 
@@ -40,9 +41,25 @@ export default function HomeScreen() {
   // Only offer classes the user actually has words in, in canonical order
   const availablePos = POS_VALUES.filter((p) => words.some((w) => w.pos === p));
   const activeFilter = posFilter !== 'all' && !availablePos.includes(posFilter) ? 'all' : posFilter;
+  // Search the user's own list (Italian lemma or English translation)
+  const q = listQuery
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '');
+  const matchesQuery = (w: (typeof words)[number]) => {
+    if (!q) return true;
+    const hay = `${w.lemma} ${w.translation}`
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '');
+    return hay.includes(q);
+  };
+
   const filteredWords = words
     .filter((w) => (activeFilter === 'all' ? true : w.pos === activeFilter))
     .filter((w) => (flaggedOnly ? w.flagged : true))
+    .filter(matchesQuery)
     .slice()
     .sort((a, b) => {
       const cmp =
@@ -177,6 +194,25 @@ export default function HomeScreen() {
                   );
                 })}
               </View>
+            </View>
+
+            {/* Search within my words */}
+            <View className="mb-3 flex-row items-center gap-2 rounded-2xl bg-surface px-3">
+              <Ionicons name="search" size={16} color={colors.textLo} />
+              <TextInput
+                value={listQuery}
+                onChangeText={setListQuery}
+                placeholder="Search my words…"
+                placeholderTextColor={colors.textLo}
+                autoCapitalize="none"
+                autoCorrect={false}
+                className="flex-1 py-2.5 text-base text-textHi"
+              />
+              {listQuery.length > 0 && (
+                <Pressable accessibilityLabel="Clear search" onPress={() => setListQuery('')}>
+                  <Ionicons name="close-circle" size={18} color={colors.textLo} />
+                </Pressable>
+              )}
             </View>
 
             {/* Word-class filter bar */}

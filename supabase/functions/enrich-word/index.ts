@@ -33,10 +33,14 @@ const normalize = (s: string) =>
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function groqJson(messages: unknown[], attempt = 1): Promise<Record<string, unknown>> {
+async function groqJson(
+  messages: unknown[],
+  attempt = 1,
+  preferModel?: string,
+): Promise<Record<string, unknown>> {
   // Fall back to the smaller/faster model on later attempts if the big one is
   // rate-limited (concurrent bulk jobs can saturate the free tier).
-  const model = attempt >= 3 ? 'llama-3.1-8b-instant' : GROQ_MODEL;
+  const model = preferModel ?? (attempt >= 3 ? 'llama-3.1-8b-instant' : GROQ_MODEL);
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -53,17 +57,64 @@ async function groqJson(messages: unknown[], attempt = 1): Promise<Record<string
   if (res.status === 429 && attempt <= 4) {
     const wait = Math.min(Number(res.headers.get('retry-after') ?? 3), 8) * 1000;
     await sleep(wait);
-    return groqJson(messages, attempt + 1);
+    return groqJson(messages, attempt + 1, preferModel);
   }
   if (!res.ok) throw new Error(`groq ${res.status}: ${(await res.text()).slice(0, 160)}`);
   const data = await res.json();
   return JSON.parse(data.choices[0].message.content);
 }
 
+async function conjugateTables(lemma: string, aux: string): Promise<Record<string, Record<string, string>>> {
+  const reflexive = /rsi$/.test(lemma);
+  const messages = [
+    { role: 'system', content: 'You are an expert Italian grammarian. Reply with valid JSON only.' },
+    {
+      role: 'user',
+      content:
+        `Conjugate "${lemma}" (auxiliary: ${aux}) in indicativo ${TENSES.join(', ')} ` +
+        `(condizionale_presente = condizionale, congiuntivo_presente = congiuntivo) for all six persons. ` +
+        `Be precise: io/tu/lui_lei/noi/voi/loro must each be the correct distinct form. ` +
+        `passato_prossimo: full compound with masculine agreement. ` +
+        (reflexive ? 'REFLEXIVE: include the reflexive pronoun. ' : 'No subject pronouns inside forms. ') +
+        `Respond as JSON: {"tenses": {${TENSES.map((t) => `"${t}": {${PERSONS.map((p) => `"${p}":"..."`).join(',')}}`).join(',')}}}`,
+    },
+  ];
+  // Prefer a stronger model for accuracy; validate completeness with retries.
+  for (const model of ['openai/gpt-oss-120b', GROQ_MODEL, GROQ_MODEL]) {
+    try {
+      const out = await groqJson(messages, 1, model);
+      const tenses = (out.tenses ?? {}) as Record<string, Record<string, string>>;
+      if (TENSES.every((t) => PERSONS.every((p) => tenses[t]?.[p]?.trim()))) return tenses;
+    } catch (_) {
+      /* try next model */
+    }
+  }
+  throw new Error('could not generate complete conjugations');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
-    const { lemma: rawLemma, target = 'it', source = 'en' } = await req.json();
+    const bodyIn = await req.json();
+
+    // Action: regenerate conjugation tables for a verb (no DB writes) — used by
+    // the "Re-check with AI" button on the word card.
+    if (bodyIn.action === 'conjugate') {
+      const lemma = String(bodyIn.lemma ?? '').trim().toLowerCase();
+      const aux = bodyIn.auxiliary === 'essere' ? 'essere' : 'avere';
+      if (!lemma) {
+        return new Response(JSON.stringify({ error: 'invalid lemma' }), {
+          status: 400,
+          headers: { ...cors, 'content-type': 'application/json' },
+        });
+      }
+      const tenses = await conjugateTables(lemma, aux);
+      return new Response(JSON.stringify({ lemma, auxiliary: aux, tenses }), {
+        headers: { ...cors, 'content-type': 'application/json' },
+      });
+    }
+
+    const { lemma: rawLemma, target = 'it', source = 'en' } = bodyIn;
     const lemma = String(rawLemma ?? '').trim().toLowerCase();
     if (!lemma || lemma.length > 40) {
       return new Response(JSON.stringify({ error: 'invalid lemma' }), {

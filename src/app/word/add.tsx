@@ -32,7 +32,7 @@ import {
   type Tense,
 } from '@/lib/italian';
 import type { LexiconSuggestion, WordStatus } from '@/lib/schemas';
-import { useAddWord, useLexiconConjugations } from '@/lib/words';
+import { useAddWord, useLexiconConjugations, useRecentWords } from '@/lib/words';
 import { colors } from '@/theme/tokens';
 
 function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'primary' }) {
@@ -72,6 +72,11 @@ export default function AddWordScreen() {
   const search = useLexiconSearch(query, searchLang);
   const addWord = useAddWord();
   const enrich = useEnrichWord();
+  const myWords = useRecentWords();
+
+  // Is a given Italian lemma+pos already in the user's list? (which one)
+  const ownedStatus = (lemma: string, p: string): WordStatus | null =>
+    (myWords.data ?? []).find((w) => w.pos === p && matchesLemma(lemma, w.lemma))?.status ?? null;
   // Live conjugation preview for the picked verb (custom verbs: rule-based)
   const lexConjugations = useLexiconConjugations(
     selected?.pos === 'verb' ? selected.id : null,
@@ -192,7 +197,7 @@ export default function AddWordScreen() {
               ))}
             </View>
           </View>
-          <View className="rounded-2xl bg-surface px-4">
+          <View className="flex-row items-center rounded-2xl bg-surface px-4">
             <TextInput
               value={query}
               onChangeText={(t) => {
@@ -204,8 +209,19 @@ export default function AddWordScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               autoFocus
-              className="py-3.5 text-base text-textHi"
+              className="flex-1 py-3.5 text-base text-textHi"
             />
+            {query.length > 0 && (
+              <Pressable
+                accessibilityLabel="Clear"
+                hitSlop={8}
+                onPress={() => {
+                  setQuery('');
+                  reset();
+                }}>
+                <Ionicons name="close-circle" size={20} color={colors.textLo} />
+              </Pressable>
+            )}
           </View>
 
           {searchLang === 'en' &&
@@ -241,6 +257,14 @@ export default function AddWordScreen() {
                     {s.translation ? (
                       <Text className="mt-0.5 text-xs text-textLo">{s.translation}</Text>
                     ) : null}
+                    {ownedStatus(s.lemma, s.pos) && (
+                      <View className="mt-1 flex-row items-center gap-1">
+                        <Ionicons name="checkmark-circle" size={12} color={colors.pastel.mint} />
+                        <Text className="text-[11px] font-semibold" style={{ color: colors.pastel.mint }}>
+                          In your {ownedStatus(s.lemma, s.pos) === 'known' ? 'Known' : 'To learn'} list
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   <View className="flex-row items-center gap-1.5">
                     <Badge label={s.pos} />
@@ -265,6 +289,23 @@ export default function AddWordScreen() {
               <Text className="text-xs text-textLo">auto-filled — tap a field to edit</Text>
             </View>
           )}
+
+          {/* Already-in-list note for the picked / typed word */}
+          {(() => {
+            const lemma = selected?.lemma ?? query.trim();
+            const p = selected?.pos ?? manualPos;
+            const owned = lemma.length >= 2 ? ownedStatus(lemma, p) : null;
+            if (!owned) return null;
+            return (
+              <View className="mt-3 flex-row items-center gap-1.5 rounded-2xl bg-surface px-3 py-2.5">
+                <Ionicons name="information-circle" size={16} color={colors.pastel.mint} />
+                <Text className="flex-1 text-xs text-textHi">
+                  Already in your {owned === 'known' ? 'Known' : 'To learn'} list — saving will
+                  update it.
+                </Text>
+              </View>
+            );
+          })()}
 
           {/* Manual attributes — shown when the typed word isn't an exact match */}
           {isCustom && (
