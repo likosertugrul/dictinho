@@ -268,7 +268,7 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
 
-            {/* Separate lists: to-learn and known */}
+            {/* Separate lists: to-learn and known (preview 10 → See all) */}
             {learningWords.length > 0 && (
               <View className="mb-5">
                 <View className="mb-2 flex-row items-center gap-1.5">
@@ -277,7 +277,18 @@ export default function HomeScreen() {
                     To learn ({learningWords.length})
                   </Text>
                 </View>
-                {renderWordList(learningWords)}
+                {renderWordList(learningWords.slice(0, 10))}
+                {learningWords.length > 10 && (
+                  <Pressable
+                    accessibilityLabel="See all to-learn words"
+                    onPress={() => router.push('/words?status=learning')}
+                    className="mt-2 flex-row items-center justify-center gap-1 rounded-2xl bg-surface py-3">
+                    <Text className="text-sm font-semibold text-primary">
+                      See all {learningWords.length}
+                    </Text>
+                    <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+                  </Pressable>
+                )}
               </View>
             )}
 
@@ -289,7 +300,18 @@ export default function HomeScreen() {
                     Known ({knownWords.length})
                   </Text>
                 </View>
-                {renderWordList(knownWords)}
+                {renderWordList(knownWords.slice(0, 10))}
+                {knownWords.length > 10 && (
+                  <Pressable
+                    accessibilityLabel="See all known words"
+                    onPress={() => router.push('/words?status=known')}
+                    className="mt-2 flex-row items-center justify-center gap-1 rounded-2xl bg-surface py-3">
+                    <Text className="text-sm font-semibold text-primary">
+                      See all {knownWords.length}
+                    </Text>
+                    <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+                  </Pressable>
+                )}
               </View>
             )}
 

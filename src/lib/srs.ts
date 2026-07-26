@@ -86,9 +86,9 @@ function meaningTokens(translation: string): string[] {
  */
 export type PracticeMode = 'due' | 'flagged' | 'wrong';
 
-export function useDueCards(mode: PracticeMode = 'due', pos?: string) {
+export function useDueCards(mode: PracticeMode = 'due', pos?: string, includeKnown = false) {
   return useQuery({
-    queryKey: ['srs', mode, pos ?? 'all'],
+    queryKey: ['srs', mode, pos ?? 'all', includeKnown ? 'withknown' : 'noknown'],
     enabled: isSupabaseConfigured,
     staleTime: 0,
     queryFn: async (): Promise<DueCard[]> => {
@@ -162,8 +162,9 @@ export function useDueCards(mode: PracticeMode = 'due', pos?: string) {
         if (pos && w.pos !== pos) return false; // optional word-class focus
         if (mode === 'wrong') return c.last_rating != null && c.last_rating < 3;
         if (mode === 'flagged') return w.flagged;
-        // 'due' drills words you're still learning — skip ones marked known
-        return w.status !== 'known' && new Date(c.due_at).getTime() <= now;
+        // 'due' drills words you're still learning — skip known unless asked
+        if (!includeKnown && w.status === 'known') return false;
+        return new Date(c.due_at).getTime() <= now;
       };
       return cards
         .filter(inScope)

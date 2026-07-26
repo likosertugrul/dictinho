@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { adjectiveForms, nounForms } from '@/lib/inflect';
 import {
   PERSON_LABELS,
   PERSONS,
@@ -44,6 +45,16 @@ function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 
       <Text className={`text-xs font-semibold ${tone === 'primary' ? 'text-white' : 'text-textLo'}`}>
         {label}
       </Text>
+    </View>
+  );
+}
+
+function FormRow({ label, value, border }: { label: string; value: string; border?: boolean }) {
+  return (
+    <View
+      className={`flex-row items-center justify-between px-4 py-3 ${border ? 'border-t border-border' : ''}`}>
+      <Text className="text-sm font-semibold text-textLo">{label}</Text>
+      <Text className="text-base font-semibold text-textHi">{value}</Text>
     </View>
   );
 }
@@ -186,6 +197,42 @@ export default function WordDetailScreen() {
               );
             })}
           </View>
+
+          {/* Inflected forms — nouns (sg/pl) and adjectives (gender × number) */}
+          {w.pos === 'noun' &&
+            (() => {
+              const f = nounForms(w.lemma, w.gender);
+              return (
+                <View className="mt-4">
+                  <Text className="mb-3 text-lg font-bold text-textHi">Forms</Text>
+                  <View className="overflow-hidden rounded-card bg-surface">
+                    <FormRow label="Singular" value={withArticle(f.singular, w.gender)} />
+                    <FormRow label="Plural" value={f.plural} border />
+                  </View>
+                </View>
+              );
+            })()}
+
+          {w.pos === 'adj' &&
+            (() => {
+              const f = adjectiveForms(w.lemma);
+              return (
+                <View className="mt-4">
+                  <Text className="mb-3 text-lg font-bold text-textHi">Forms</Text>
+                  <View className="overflow-hidden rounded-card bg-surface">
+                    <FormRow label="Masc. sing." value={f.m_sg} />
+                    <FormRow label="Fem. sing." value={f.f_sg} border />
+                    <FormRow label="Masc. plur." value={f.m_pl} border />
+                    <FormRow label="Fem. plur." value={f.f_pl} border />
+                  </View>
+                  {!f.fourForms && (
+                    <Text className="mt-2 px-1 text-xs text-textLo">
+                      This adjective has the same form for both genders.
+                    </Text>
+                  )}
+                </View>
+              );
+            })()}
 
           {/* Conjugation tables */}
           {w.pos === 'verb' && (

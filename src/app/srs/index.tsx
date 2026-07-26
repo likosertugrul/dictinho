@@ -18,11 +18,12 @@ import { useToggleFlag } from '@/lib/words';
 import { colors } from '@/theme/tokens';
 
 export default function SrsScreen() {
-  const { mode: modeParam, pos: posParam } = useLocalSearchParams<{ mode?: string; pos?: string }>();
+  const { mode: modeParam, pos: posParam, known: knownParam } =
+    useLocalSearchParams<{ mode?: string; pos?: string; known?: string }>();
   const mode: PracticeMode =
     modeParam === 'flagged' ? 'flagged' : modeParam === 'wrong' ? 'wrong' : 'due';
   const pos = posParam && posParam !== 'all' ? posParam : undefined;
-  const due = useDueCards(mode, pos);
+  const due = useDueCards(mode, pos, knownParam === '1');
   const review = useReviewCard();
   const toggleFlag = useToggleFlag();
 

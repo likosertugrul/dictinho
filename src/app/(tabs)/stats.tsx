@@ -16,19 +16,22 @@ export default function PracticeScreen() {
   const recent = useRecentWords();
   const wrong = useWrongWords();
   const [focus, setFocus] = useState<Focus>('all');
+  const [includeKnown, setIncludeKnown] = useState(false);
 
   const words = recent.data ?? [];
   const starred = words.filter((w) => w.flagged);
   const mistakes = wrong.data ?? [];
+  const hasKnown = words.some((w) => w.status === 'known');
 
   // Word classes the user actually has, in canonical order
   const availablePos = POS_VALUES.filter((p) => words.some((w) => w.pos === p));
 
-  const practice = (mode: 'due' | 'flagged' | 'wrong') =>
-    router.push({
-      pathname: '/srs',
-      params: focus === 'all' ? { mode } : { mode, pos: focus },
-    });
+  const practice = (mode: 'due' | 'flagged' | 'wrong') => {
+    const params: Record<string, string> = { mode };
+    if (focus !== 'all') params.pos = focus;
+    if (mode === 'due' && includeKnown) params.known = '1';
+    router.push({ pathname: '/srs', params });
+  };
 
   const applyFocus = (list: UserWord[]) =>
     focus === 'all' ? list : list.filter((w) => w.pos === focus);
@@ -83,6 +86,29 @@ export default function PracticeScreen() {
               </>
             )}
 
+            {/* Include known words toggle */}
+            {hasKnown && (
+              <Pressable
+                accessibilityLabel="Toggle including known words"
+                onPress={() => setIncludeKnown((v) => !v)}
+                className="mb-3 flex-row items-center justify-between rounded-2xl bg-surface px-4 py-3">
+                <View className="flex-1 pr-3">
+                  <Text className="text-sm font-semibold text-textHi">Include known words</Text>
+                  <Text className="text-xs text-textLo">
+                    Also review words you marked as known
+                  </Text>
+                </View>
+                <View
+                  className={`h-6 w-11 justify-center rounded-full px-0.5 ${
+                    includeKnown ? 'bg-primary' : 'bg-surfaceAlt'
+                  }`}>
+                  <View
+                    className={`h-5 w-5 rounded-full bg-white ${includeKnown ? 'self-end' : 'self-start'}`}
+                  />
+                </View>
+              </Pressable>
+            )}
+
             {/* Flashcards (due, spaced repetition) */}
             <Pressable
               accessibilityLabel="Practice flashcards"
@@ -95,6 +121,7 @@ export default function PracticeScreen() {
                 <Text className="text-base font-bold text-white">Flashcards</Text>
                 <Text className="text-xs text-white/80">
                   Review words that are due{focus !== 'all' ? ` · ${POS_LABELS[focus]}` : ''}
+                  {includeKnown ? ' · incl. known' : ''}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.onPrimary} />
