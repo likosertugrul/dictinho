@@ -18,9 +18,11 @@ import { useToggleFlag } from '@/lib/words';
 import { colors } from '@/theme/tokens';
 
 export default function SrsScreen() {
-  const { mode: modeParam } = useLocalSearchParams<{ mode?: string }>();
-  const mode: PracticeMode = modeParam === 'flagged' ? 'flagged' : 'due';
-  const due = useDueCards(mode);
+  const { mode: modeParam, pos: posParam } = useLocalSearchParams<{ mode?: string; pos?: string }>();
+  const mode: PracticeMode =
+    modeParam === 'flagged' ? 'flagged' : modeParam === 'wrong' ? 'wrong' : 'due';
+  const pos = posParam && posParam !== 'all' ? posParam : undefined;
+  const due = useDueCards(mode, pos);
   const review = useReviewCard();
   const toggleFlag = useToggleFlag();
 
@@ -50,7 +52,8 @@ export default function SrsScreen() {
 
   const check = () => {
     if (!current || !guess.trim()) return;
-    setWasCorrect(matchesLemma(guess, current.word.lemma));
+    // Accept any Italian word that shares this English meaning (what → che/cosa/…)
+    setWasCorrect(current.accept.some((lemma) => matchesLemma(guess, lemma)));
     setRevealed(true);
   };
 
@@ -117,6 +120,8 @@ export default function SrsScreen() {
 
   const { word } = current;
   const answer = word.pos === 'noun' ? withArticle(word.lemma, word.gender) : word.lemma;
+  // Synonyms accepted besides the card's own word (e.g. what → cosa, che cosa)
+  const otherAccepted = current.accept.filter((l) => l !== word.lemma);
   const done = reviewed;
   const total = Math.max(initialTotal, reviewed + queue.length);
 
@@ -186,6 +191,12 @@ export default function SrsScreen() {
                 <Text className="mt-3 text-2xl font-bold text-textHi">{answer}</Text>
                 {!wasCorrect && guess.trim().length > 0 && (
                   <Text className="mt-1 text-sm text-textLo">you wrote: {guess.trim()}</Text>
+                )}
+                {/* Other accepted synonyms for this meaning */}
+                {otherAccepted.length > 0 && (
+                  <Text className="mt-2 text-center text-xs text-textLo">
+                    also accepted: {otherAccepted.join(', ')}
+                  </Text>
                 )}
                 {word.auxiliary ? (
                   <View className="mt-2">

@@ -65,6 +65,18 @@ const CARD_COLS = 'id, ref_id, ease_factor, interval_days, repetitions, due_at, 
 export interface DueCard {
   card: z.infer<typeof cardSchema>;
   word: UserWord;
+  /** All acceptable Italian answers for this prompt (synonyms sharing a meaning). */
+  accept: string[];
+}
+
+/** Meaning tokens of an English translation, for synonym matching. */
+function meaningTokens(translation: string): string[] {
+  return translation
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, '') // drop parenthetical notes: "how many (quanti, quante)"
+    .split(/[,/;]|\bor\b/) // split on , / ; or
+    .map((t) => t.replace(/^to\s+/, '').trim()) // "to have" → "have"
+    .filter((t) => t.length > 0);
 }
 
 /**
@@ -74,9 +86,9 @@ export interface DueCard {
  */
 export type PracticeMode = 'due' | 'flagged' | 'wrong';
 
-export function useDueCards(mode: PracticeMode = 'due') {
+export function useDueCards(mode: PracticeMode = 'due', pos?: string) {
   return useQuery({
-    queryKey: ['srs', mode],
+    queryKey: ['srs', mode, pos ?? 'all'],
     enabled: isSupabaseConfigured,
     staleTime: 0,
     queryFn: async (): Promise<DueCard[]> => {
@@ -84,10 +96,12 @@ export function useDueCards(mode: PracticeMode = 'due') {
       const supabase = getSupabase();
       const userId = session!.user.id;
 
-      // The words in scope for this mode
-      let q = supabase.from('user_words').select('*').order('created_at', { ascending: false });
-      if (mode === 'flagged') q = q.eq('flagged', true);
-      const { data: wordsRaw, error: wErr } = await q;
+      // Fetch ALL words (needed to compute synonyms across the whole vocabulary);
+      // the mode scoping happens on the cards below.
+      const { data: wordsRaw, error: wErr } = await supabase
+        .from('user_words')
+        .select('*')
+        .order('created_at', { ascending: false });
       if (wErr) throw new Error(wErr.message);
       const words = z.array(userWordSchema).parse(wordsRaw ?? []);
       if (words.length === 0) return [];
@@ -123,21 +137,41 @@ export function useDueCards(mode: PracticeMode = 'due') {
         cards = cards.concat(z.array(cardSchema).parse(inserted ?? []));
       }
 
+      // Synonym index: meaning token → set of lemmas that share it
+      const byMeaning = new Map<string, Set<string>>();
+      for (const w of words) {
+        for (const tok of meaningTokens(w.translation)) {
+          if (!byMeaning.has(tok)) byMeaning.set(tok, new Set());
+          byMeaning.get(tok)!.add(w.lemma);
+        }
+      }
+      const acceptableFor = (w: UserWord): string[] => {
+        const set = new Set<string>([w.lemma]);
+        for (const tok of meaningTokens(w.translation))
+          for (const lemma of byMeaning.get(tok) ?? []) set.add(lemma);
+        return [...set];
+      };
+
       // Restrict to this mode's cards. 'flagged'/'wrong' ignore the schedule so
       // the user can drill those lists any time.
       const wordById = new Map(words.map((w) => [w.id, w]));
       const now = Date.now() + 30_000; // small buffer for residual clock skew
       const inScope = (c: (typeof cards)[number]) => {
+        const w = wordById.get(c.ref_id);
+        if (!w) return false;
+        if (pos && w.pos !== pos) return false; // optional word-class focus
         if (mode === 'wrong') return c.last_rating != null && c.last_rating < 3;
-        if (mode === 'flagged') return true;
+        if (mode === 'flagged') return w.flagged;
         // 'due' drills words you're still learning — skip ones marked known
-        return wordById.get(c.ref_id)?.status !== 'known' && new Date(c.due_at).getTime() <= now;
+        return w.status !== 'known' && new Date(c.due_at).getTime() <= now;
       };
       return cards
-        .filter((c) => wordById.has(c.ref_id))
         .filter(inScope)
         .sort((a, b) => a.due_at.localeCompare(b.due_at))
-        .map((card) => ({ card, word: wordById.get(card.ref_id)! }));
+        .map((card) => {
+          const word = wordById.get(card.ref_id)!;
+          return { card, word, accept: acceptableFor(word) };
+        });
     },
   });
 }
