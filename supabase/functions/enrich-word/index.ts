@@ -114,39 +114,51 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { lemma: rawLemma, target = 'it', source = 'en' } = bodyIn;
-    const lemma = String(rawLemma ?? '').trim().toLowerCase();
-    if (!lemma || lemma.length > 40) {
-      return new Response(JSON.stringify({ error: 'invalid lemma' }), {
+    const { lemma: rawLemma, english: rawEnglish, target = 'it', source = 'en' } = bodyIn;
+    const fromEnglish = typeof rawEnglish === 'string' && rawEnglish.trim().length > 0;
+    const inputTerm = String((fromEnglish ? rawEnglish : rawLemma) ?? '').trim();
+    if (!inputTerm || inputTerm.length > 60) {
+      return new Response(JSON.stringify({ error: 'invalid input' }), {
         status: 400,
         headers: { ...cors, 'content-type': 'application/json' },
       });
     }
+    const lemma = inputTerm.toLowerCase();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // 1) Classify the word
+    // 1) Classify. Two directions:
+    //    - Italian word  → validate + classify it
+    //    - English word  → translate to the most common Italian word, then classify
+    const userPrompt = fromEnglish
+      ? `The English word or phrase is "${inputTerm}". Give the single most common Italian ` +
+        `dictionary word for it. Respond as JSON: ` +
+        `{"valid": true|false (false if not translatable to a real Italian word), ` +
+        `"lemma": "the Italian dictionary form, lowercase, infinitive for verbs, singular for nouns", ` +
+        `"pos": "verb"|"noun"|"adj"|"adv"|"prep"|"pron"|"conj"|"interj"|"phrase", ` +
+        `"gender": "m"|"f"|null (nouns only), ` +
+        `"auxiliary": "essere"|"avere"|null (verbs only, passato prossimo auxiliary), ` +
+        `"is_irregular": true|false, "cefr": "A1".."C2", ` +
+        `"translations": ["1-3 accurate English translations, including \\"${inputTerm}\\""]}`
+      : `Analyze the Italian word "${inputTerm}". Respond as JSON: ` +
+        `{"valid": true|false, "lemma": "dictionary form, lowercase, infinitive for verbs, singular for nouns", ` +
+        `"pos": "verb"|"noun"|"adj"|"adv"|"prep"|"pron"|"conj"|"interj"|"phrase", ` +
+        `"gender": "m"|"f"|null (nouns only), ` +
+        `"auxiliary": "essere"|"avere"|null (verbs only, passato prossimo auxiliary), ` +
+        `"is_irregular": true|false, "cefr": "A1".."C2", ` +
+        `"translations": ["1-3 accurate English translations"]}`;
+
     const info = await groqJson([
       {
         role: 'system',
         content:
           'You are an expert Italian lexicographer. Reply with valid JSON only. ' +
-          'If the input is not a real Italian dictionary word, set "valid": false.',
+          'If the input does not map to a real Italian dictionary word, set "valid": false.',
       },
-      {
-        role: 'user',
-        content:
-          `Analyze the Italian word "${lemma}". Respond as JSON: ` +
-          `{"valid": true|false, "lemma": "dictionary form, lowercase, infinitive for verbs, singular for nouns", ` +
-          `"pos": "verb"|"noun"|"adj"|"adv"|"prep"|"pron"|"conj"|"interj"|"phrase", ` +
-          `"gender": "m"|"f"|null (nouns only), ` +
-          `"auxiliary": "essere"|"avere"|null (verbs only, passato prossimo auxiliary), ` +
-          `"is_irregular": true|false, "cefr": "A1".."C2", ` +
-          `"translations": ["1-3 accurate English translations"]}`,
-      },
+      { role: 'user', content: userPrompt },
     ]);
 
     if (!info.valid || !info.pos || !Array.isArray(info.translations) || !info.translations.length) {

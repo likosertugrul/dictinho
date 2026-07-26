@@ -435,22 +435,28 @@ export function useConjugations(wordId: string) {
   });
 }
 
-export function useRecentWords(limit = 50) {
+/** All of the user's words (paged past PostgREST's 1000-row cap — no truncation). */
+export function useRecentWords() {
   return useQuery({
-    queryKey: ['user-words', 'recent', limit],
+    queryKey: ['user-words', 'recent'],
     enabled: isSupabaseConfigured,
     queryFn: async () => {
       const supabase = getSupabase();
       // No session yet → no words yet; skip the RLS-blocked query.
       const { data: s } = await supabase.auth.getSession();
       if (!s.session) return [];
-      const { data, error } = await supabase
-        .from('user_words')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-      if (error) throw new Error(error.message);
-      return z.array(userWordSchema).parse(data);
+      const all: unknown[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase
+          .from('user_words')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + 999);
+        if (error) throw new Error(error.message);
+        all.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      return z.array(userWordSchema).parse(all);
     },
   });
 }

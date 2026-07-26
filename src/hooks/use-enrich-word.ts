@@ -3,25 +3,34 @@ import { useMutation } from '@tanstack/react-query';
 import { lexiconSuggestionSchema, type LexiconSuggestion } from '@/lib/schemas';
 import { getSupabase } from '@/lib/supabase';
 
+export interface EnrichInput {
+  term: string;
+  /** 'it' = the term is an Italian word; 'en' = translate the English term first. */
+  lang: 'it' | 'en';
+}
+
 /**
- * Ask the enrich-word Edge Function to look up a word that isn't in the base
- * lexicon: it classifies the word (pos/gender/auxiliary/translation), generates
- * conjugations for verbs, inserts everything into the shared lexicon, and
- * returns a suggestion row identical to what autocomplete would produce.
+ * Ask the enrich-word Edge Function to look up a word not in the base lexicon.
+ * Works in both directions:
+ *  - lang 'it': classify the typed Italian word
+ *  - lang 'en': translate the English term to the most common Italian word
+ * Either way it inserts the entry into the shared lexicon (with conjugations for
+ * verbs) and returns a suggestion row identical to autocomplete.
  */
 export function useEnrichWord() {
-  return useMutation<LexiconSuggestion, Error, string>({
-    mutationFn: async (lemma: string) => {
-      const { data, error } = await getSupabase().functions.invoke('enrich-word', {
-        body: { lemma: lemma.trim(), target: 'it', source: 'en' },
-      });
+  return useMutation<LexiconSuggestion, Error, EnrichInput>({
+    mutationFn: async ({ term, lang }: EnrichInput) => {
+      const body =
+        lang === 'en'
+          ? { english: term.trim() }
+          : { lemma: term.trim(), target: 'it', source: 'en' };
+      const { data, error } = await getSupabase().functions.invoke('enrich-word', { body });
       if (error) {
-        // Edge Function returns a JSON error body on 4xx/5xx
         const detail = (error as { context?: Response }).context;
         if (detail) {
           try {
             const j = await detail.json();
-            if (j?.error === 'not_a_word') throw new Error("That doesn't look like an Italian word.");
+            if (j?.error === 'not_a_word') throw new Error("That doesn't map to an Italian word.");
             if (j?.error) throw new Error(j.error);
           } catch {
             /* fall through */
@@ -30,7 +39,9 @@ export function useEnrichWord() {
         throw new Error(error.message);
       }
       if (data?.error) {
-        throw new Error(data.error === 'not_a_word' ? "That doesn't look like an Italian word." : data.error);
+        throw new Error(
+          data.error === 'not_a_word' ? "That doesn't map to an Italian word." : data.error,
+        );
       }
       return lexiconSuggestionSchema.parse(data);
     },

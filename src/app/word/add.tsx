@@ -113,12 +113,16 @@ export default function AddWordScreen() {
   const runEnrich = () => {
     const term = query.trim();
     if (!term) return;
-    enrich.mutate(term, {
-      onSuccess: (s) => {
-        pick(s); // treat the AI-added entry exactly like a dictionary match
-        if (s.pos === 'verb') setTenses(['presente']);
+    enrich.mutate(
+      { term, lang: searchLang },
+      {
+        onSuccess: (s) => {
+          if (searchLang === 'en') setSearchLang('it'); // switch to show the Italian word
+          pick(s); // treat the AI-added entry exactly like a dictionary match
+          if (s.pos === 'verb') setTenses(['presente']);
+        },
       },
-    });
+    );
   };
 
   const reset = () => {
@@ -224,14 +228,45 @@ export default function AddWordScreen() {
             )}
           </View>
 
+          {/* English mode with no dictionary match → let AI find the Italian */}
           {searchLang === 'en' &&
             !selected &&
             query.trim().length >= 2 &&
             !search.isFetching &&
-            suggestions.length === 0 && (
-              <Text className="mt-2 px-1 text-xs text-textLo">
-                No match found — switch to IT and type the Italian word to add it (with AI).
-              </Text>
+            !hasExactMatch && (
+              <>
+                {suggestions.length > 0 && (
+                  <Text className="mb-2 mt-4 px-1 text-xs text-textLo">
+                    Not the meaning you meant? Let AI find it:
+                  </Text>
+                )}
+                <Pressable
+                  accessibilityLabel="Find the Italian with AI"
+                  disabled={enrich.isPending}
+                  onPress={runEnrich}
+                  className={`flex-row items-center justify-center gap-2 rounded-full bg-primary py-3.5 ${
+                    suggestions.length > 0 ? '' : 'mt-3'
+                  }`}>
+                  {enrich.isPending ? (
+                    <>
+                      <ActivityIndicator color={colors.onPrimary} />
+                      <Text className="text-sm font-bold text-white">
+                        Finding the Italian for “{query.trim()}”…
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="sparkles" size={16} color={colors.onPrimary} />
+                      <Text className="text-sm font-bold text-white">
+                        Find the Italian for “{query.trim()}” with AI
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+                {enrich.isError && (
+                  <Text className="mt-2 px-1 text-xs text-primary">{enrich.error.message}</Text>
+                )}
+              </>
             )}
 
           {search.isFetching && !selected && (
