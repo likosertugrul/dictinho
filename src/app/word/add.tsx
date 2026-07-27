@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEnrichWord } from '@/hooks/use-enrich-word';
 import { useLexiconSearch, type SearchLang } from '@/hooks/use-lexicon-search';
 import { conjugateRegular } from '@/lib/conjugator';
+import { adjectiveForms, nounForms } from '@/lib/inflect';
 import {
   AUXILIARIES,
   matchesLemma,
@@ -42,6 +43,16 @@ function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 
       <Text className={`text-xs font-semibold ${tone === 'primary' ? 'text-white' : 'text-textLo'}`}>
         {label}
       </Text>
+    </View>
+  );
+}
+
+function PreviewRow({ label, value, border }: { label: string; value: string; border?: boolean }) {
+  return (
+    <View
+      className={`flex-row items-center justify-between px-4 py-2.5 ${border ? 'border-t border-border' : ''}`}>
+      <Text className="text-xs font-semibold text-textLo">{label}</Text>
+      <Text className="text-sm font-semibold text-textHi">{value}</Text>
     </View>
   );
 }
@@ -494,6 +505,40 @@ export default function AddWordScreen() {
               })}
             </>
           )}
+
+          {/* Forms preview — nouns (sg/pl) and adjectives (gender × number) */}
+          {(() => {
+            const lemma = (selected?.lemma ?? query).trim();
+            if (lemma.length < 2) return null;
+            const gender = selected?.gender ?? manualGender;
+            if (effectivePos === 'noun') {
+              const f = nounForms(lemma, gender);
+              return (
+                <View className="mt-6">
+                  <Text className="mb-2 text-sm font-semibold text-textLo">Forms</Text>
+                  <View className="overflow-hidden rounded-2xl bg-surface">
+                    <PreviewRow label="Singular" value={f.singular} />
+                    <PreviewRow label="Plural" value={f.plural} border />
+                  </View>
+                </View>
+              );
+            }
+            if (effectivePos === 'adj') {
+              const f = adjectiveForms(lemma);
+              return (
+                <View className="mt-6">
+                  <Text className="mb-2 text-sm font-semibold text-textLo">Forms</Text>
+                  <View className="overflow-hidden rounded-2xl bg-surface">
+                    <PreviewRow label="Masc. sing." value={f.m_sg} />
+                    <PreviewRow label="Fem. sing." value={f.f_sg} border />
+                    <PreviewRow label="Masc. plur." value={f.m_pl} border />
+                    <PreviewRow label="Fem. plur." value={f.f_pl} border />
+                  </View>
+                </View>
+              );
+            }
+            return null;
+          })()}
 
           {/* Which list */}
           <Text className="mb-2 mt-6 text-sm font-semibold text-textLo">Add to</Text>
