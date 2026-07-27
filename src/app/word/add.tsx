@@ -34,7 +34,25 @@ import {
 } from '@/lib/italian';
 import type { LexiconSuggestion, WordStatus } from '@/lib/schemas';
 import { useAddWord, useLexiconConjugations, useRecentWords } from '@/lib/words';
+import { speechService } from '@/services/speech';
 import { colors } from '@/theme/tokens';
+
+/** Tap-to-listen speaker button (Italian TTS). */
+function Speaker({ text, size = 16 }: { text: string; size?: number }) {
+  if (!speechService.isAvailable || !text.trim()) return null;
+  return (
+    <Pressable
+      accessibilityLabel={`Listen to ${text}`}
+      hitSlop={8}
+      onPress={(e) => {
+        e.stopPropagation?.();
+        speechService.speak(text, { language: 'it' });
+      }}
+      className="h-7 w-7 items-center justify-center">
+      <Ionicons name="volume-medium-outline" size={size} color={colors.textLo} />
+    </Pressable>
+  );
+}
 
 function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'primary' }) {
   return (
@@ -52,7 +70,10 @@ function PreviewRow({ label, value, border }: { label: string; value: string; bo
     <View
       className={`flex-row items-center justify-between px-4 py-2.5 ${border ? 'border-t border-border' : ''}`}>
       <Text className="text-xs font-semibold text-textLo">{label}</Text>
-      <Text className="text-sm font-semibold text-textHi">{value}</Text>
+      <View className="flex-row items-center gap-1">
+        <Text className="text-sm font-semibold text-textHi">{value}</Text>
+        <Speaker text={value} />
+      </View>
     </View>
   );
 }
@@ -313,6 +334,7 @@ export default function AddWordScreen() {
                     )}
                   </View>
                   <View className="flex-row items-center gap-1.5">
+                    <Speaker text={s.pos === 'noun' ? withArticle(s.lemma, s.gender) : s.lemma} />
                     <Badge label={s.pos} />
                     {s.auxiliary ? <Badge label={s.auxiliary} tone="primary" /> : null}
                     {s.gender ? <Badge label={s.gender} /> : null}
@@ -495,9 +517,12 @@ export default function AddWordScreen() {
                         <Text className="text-xs font-semibold text-textLo">
                           {PERSON_LABELS[p]}
                         </Text>
-                        <Text className="text-sm font-semibold text-textHi">
-                          {forms[p] ?? '—'}
-                        </Text>
+                        <View className="flex-row items-center gap-1">
+                          <Text className="text-sm font-semibold text-textHi">
+                            {forms[p] ?? '—'}
+                          </Text>
+                          {forms[p] ? <Speaker text={forms[p]!} /> : null}
+                        </View>
                       </View>
                     ))}
                   </View>
