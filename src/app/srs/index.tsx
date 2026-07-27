@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { matchesLemma, withArticle } from '@/lib/italian';
+import { hasGrammar } from '@/lib/lang';
 import { useDueCards, useReviewCard, type DueCard, type PracticeMode, type Rating } from '@/lib/srs';
 import { useToggleFlag } from '@/lib/words';
 import { colors } from '@/theme/tokens';
@@ -120,7 +121,10 @@ export default function SrsScreen() {
   }
 
   const { word } = current;
-  const answer = word.pos === 'noun' ? withArticle(word.lemma, word.gender) : word.lemma;
+  const answer =
+    hasGrammar(word.target_language) && word.pos === 'noun'
+      ? withArticle(word.lemma, word.gender)
+      : word.lemma;
   // Synonyms accepted besides the card's own word (e.g. what → cosa, che cosa)
   const otherAccepted = current.accept.filter((l) => l !== word.lemma);
   const done = reviewed;

@@ -124,30 +124,36 @@ Deno.serve(async (req) => {
       });
     }
     const lemma = inputTerm.toLowerCase();
+    const LANG_NAME: Record<string, string> = { it: 'Italian', es: 'Spanish', en: 'English' };
+    const langName = LANG_NAME[target] ?? 'Italian';
+    const auxNote =
+      target === 'it'
+        ? `"auxiliary": "essere"|"avere"|null (verbs only, passato prossimo auxiliary), `
+        : `"auxiliary": null, `;
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // 1) Classify. Two directions:
-    //    - Italian word  → validate + classify it
-    //    - English word  → translate to the most common Italian word, then classify
+    // 1) Classify, in the target language. Two directions:
+    //    - target word   → validate + classify it
+    //    - English word  → translate to the most common target-language word
     const userPrompt = fromEnglish
-      ? `The English word or phrase is "${inputTerm}". Give the single most common Italian ` +
+      ? `The English word or phrase is "${inputTerm}". Give the single most common ${langName} ` +
         `dictionary word for it. Respond as JSON: ` +
-        `{"valid": true|false (false if not translatable to a real Italian word), ` +
-        `"lemma": "the Italian dictionary form, lowercase, infinitive for verbs, singular for nouns", ` +
+        `{"valid": true|false (false if not translatable to a real ${langName} word), ` +
+        `"lemma": "the ${langName} dictionary form, lowercase, infinitive for verbs, singular for nouns", ` +
         `"pos": "verb"|"noun"|"adj"|"adv"|"prep"|"pron"|"conj"|"interj"|"phrase", ` +
         `"gender": "m"|"f"|null (nouns only), ` +
-        `"auxiliary": "essere"|"avere"|null (verbs only, passato prossimo auxiliary), ` +
+        auxNote +
         `"is_irregular": true|false, "cefr": "A1".."C2", ` +
         `"translations": ["1-3 accurate English translations, including \\"${inputTerm}\\""]}`
-      : `Analyze the Italian word "${inputTerm}". Respond as JSON: ` +
+      : `Analyze the ${langName} word "${inputTerm}". Respond as JSON: ` +
         `{"valid": true|false, "lemma": "dictionary form, lowercase, infinitive for verbs, singular for nouns", ` +
         `"pos": "verb"|"noun"|"adj"|"adv"|"prep"|"pron"|"conj"|"interj"|"phrase", ` +
         `"gender": "m"|"f"|null (nouns only), ` +
-        `"auxiliary": "essere"|"avere"|null (verbs only, passato prossimo auxiliary), ` +
+        auxNote +
         `"is_irregular": true|false, "cefr": "A1".."C2", ` +
         `"translations": ["1-3 accurate English translations"]}`;
 
@@ -155,8 +161,8 @@ Deno.serve(async (req) => {
       {
         role: 'system',
         content:
-          'You are an expert Italian lexicographer. Reply with valid JSON only. ' +
-          'If the input does not map to a real Italian dictionary word, set "valid": false.',
+          `You are an expert ${langName} lexicographer. Reply with valid JSON only. ` +
+          `If the input does not map to a real ${langName} dictionary word, set "valid": false.`,
       },
       { role: 'user', content: userPrompt },
     ]);
@@ -211,8 +217,9 @@ Deno.serve(async (req) => {
         })),
       );
 
-      // 2) Verbs: generate + store conjugation tables (only if complete)
-      if (pos === 'verb') {
+      // 2) Verbs: generate + store conjugation tables (Italian only; other
+      //    languages currently store word + translation without tables)
+      if (pos === 'verb' && target === 'it') {
         const aux = (info.auxiliary ?? 'avere') as string;
         const reflexive = /rsi$/.test(canonical);
         const conjMessages = [

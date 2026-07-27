@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,10 +14,32 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuthUser } from '@/hooks/use-auth';
+import { langInfo, useTargetLang } from '@/lib/lang';
 import { getSupabase } from '@/lib/supabase';
 import { colors } from '@/theme/tokens';
 
 type Mode = 'create' | 'signin';
+
+function LanguageCard() {
+  const target = useTargetLang();
+  const info = langInfo(target);
+  return (
+    <Pressable
+      accessibilityLabel="Change learning language"
+      onPress={() => router.push('/onboarding/language')}
+      className="mt-4 flex-row items-center gap-3 rounded-card bg-surface p-4">
+      <View className="h-11 w-11 items-center justify-center rounded-full bg-surfaceAlt">
+        <Text className="text-2xl">{info.flag}</Text>
+      </View>
+      <View className="flex-1">
+        <Text className="text-xs text-textLo">Learning</Text>
+        <Text className="text-base font-bold text-textHi">{info.name}</Text>
+      </View>
+      <Text className="mr-1 text-xs font-semibold text-primary">Change</Text>
+      <Ionicons name="chevron-forward" size={18} color={colors.textLo} />
+    </Pressable>
+  );
+}
 
 export default function ProfileScreen() {
   const { user, loading } = useAuthUser();
@@ -99,12 +122,13 @@ export default function ProfileScreen() {
       <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
         <ScrollView contentContainerClassName="px-5 pt-4">
           <Text className="text-2xl font-bold text-textHi">Profile</Text>
+          <LanguageCard />
           <View className="mt-4 items-center rounded-card bg-surface p-6">
             <View className="h-16 w-16 items-center justify-center rounded-full bg-primary">
               <Ionicons name="person" size={28} color={colors.onPrimary} />
             </View>
             <Text className="mt-3 text-base font-bold text-textHi">{user.email}</Text>
-            <Text className="mt-1 text-xs text-textLo">Signed in · learning EN → IT</Text>
+            <Text className="mt-1 text-xs text-textLo">Signed in</Text>
           </View>
           <Pressable
             accessibilityLabel="Sign out"
@@ -131,6 +155,7 @@ export default function ProfileScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerClassName="px-5 pt-4" keyboardShouldPersistTaps="handled">
           <Text className="text-2xl font-bold text-textHi">Profile</Text>
+          <LanguageCard />
 
           {isAnonymous && (
             <View className="mt-4 rounded-card bg-surface p-4">

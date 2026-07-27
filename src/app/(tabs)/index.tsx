@@ -5,8 +5,12 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { POS_LABELS, POS_VALUES, withArticle, type Pos } from '@/lib/italian';
+import { hasGrammar } from '@/lib/lang';
 import { useRecentWords, useToggleFlag } from '@/lib/words';
 import { colors } from '@/theme/tokens';
+
+const displayLemma = (w: { pos: string; lemma: string; gender: 'm' | 'f' | null; target_language: string }) =>
+  hasGrammar(w.target_language) && w.pos === 'noun' ? withArticle(w.lemma, w.gender) : w.lemma;
 
 function StatChip({ icon, value }: { icon: string; value: number }) {
   return (
@@ -84,7 +88,7 @@ export default function HomeScreen() {
           }`}>
           <View className="flex-1 pr-3">
             <Text className="text-base font-semibold text-textHi">
-              {w.pos === 'noun' ? withArticle(w.lemma, w.gender) : w.lemma}
+              {displayLemma(w)}
             </Text>
             <Text className="mt-0.5 text-xs text-textLo">{w.translation}</Text>
           </View>

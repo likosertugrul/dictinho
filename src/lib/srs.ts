@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
+import { useTargetLang } from '@/lib/lang';
 import { userWordSchema, type UserWord } from '@/lib/schemas';
 import { ensureSession, getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -87,8 +88,9 @@ function meaningTokens(translation: string): string[] {
 export type PracticeMode = 'due' | 'flagged' | 'wrong';
 
 export function useDueCards(mode: PracticeMode = 'due', pos?: string, includeKnown = false) {
+  const target = useTargetLang();
   return useQuery({
-    queryKey: ['srs', mode, pos ?? 'all', includeKnown ? 'withknown' : 'noknown'],
+    queryKey: ['srs', mode, pos ?? 'all', includeKnown ? 'withknown' : 'noknown', target],
     enabled: isSupabaseConfigured,
     staleTime: 0,
     queryFn: async (): Promise<DueCard[]> => {
@@ -96,11 +98,12 @@ export function useDueCards(mode: PracticeMode = 'due', pos?: string, includeKno
       const supabase = getSupabase();
       const userId = session!.user.id;
 
-      // Fetch ALL words (needed to compute synonyms across the whole vocabulary);
-      // the mode scoping happens on the cards below.
+      // Fetch this language's words (synonyms computed within it); the mode
+      // scoping happens on the cards below.
       const { data: wordsRaw, error: wErr } = await supabase
         .from('user_words')
         .select('*')
+        .eq('target_language', target)
         .order('created_at', { ascending: false });
       if (wErr) throw new Error(wErr.message);
       const words = z.array(userWordSchema).parse(wordsRaw ?? []);
@@ -207,8 +210,9 @@ export function useReviewCard() {
 
 /** Words whose last review was wrong (rating < 3) — the mistakes list. */
 export function useWrongWords() {
+  const target = useTargetLang();
   return useQuery({
-    queryKey: ['srs', 'wrong-list'],
+    queryKey: ['srs', 'wrong-list', target],
     enabled: isSupabaseConfigured,
     queryFn: async (): Promise<UserWord[]> => {
       const supabase = getSupabase();
@@ -227,6 +231,7 @@ export function useWrongWords() {
       const { data: wordsRaw, error: wErr } = await supabase
         .from('user_words')
         .select('*')
+        .eq('target_language', target)
         .in(
           'id',
           rows.map((r) => r.ref_id),

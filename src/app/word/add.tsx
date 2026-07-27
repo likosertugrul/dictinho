@@ -18,6 +18,7 @@ import { useEnrichWord } from '@/hooks/use-enrich-word';
 import { useLexiconSearch, type SearchLang } from '@/hooks/use-lexicon-search';
 import { conjugateRegular } from '@/lib/conjugator';
 import { adjectiveForms, nounForms } from '@/lib/inflect';
+import { hasGrammar, langInfo, useTargetLang } from '@/lib/lang';
 import {
   AUXILIARIES,
   matchesLemma,
@@ -37,8 +38,8 @@ import { useAddWord, useLexiconConjugations, useRecentWords } from '@/lib/words'
 import { speechService } from '@/services/speech';
 import { colors } from '@/theme/tokens';
 
-/** Tap-to-listen speaker button (Italian TTS). */
-function Speaker({ text, size = 16 }: { text: string; size?: number }) {
+/** Tap-to-listen speaker button (TTS in the given language). */
+function Speaker({ text, lang, size = 16 }: { text: string; lang: string; size?: number }) {
   if (!speechService.isAvailable || !text.trim()) return null;
   return (
     <Pressable
@@ -46,7 +47,7 @@ function Speaker({ text, size = 16 }: { text: string; size?: number }) {
       hitSlop={8}
       onPress={(e) => {
         e.stopPropagation?.();
-        speechService.speak(text, { language: 'it' });
+        speechService.speak(text, { language: lang });
       }}
       className="h-7 w-7 items-center justify-center">
       <Ionicons name="volume-medium-outline" size={size} color={colors.textLo} />
@@ -72,13 +73,15 @@ function PreviewRow({ label, value, border }: { label: string; value: string; bo
       <Text className="text-xs font-semibold text-textLo">{label}</Text>
       <View className="flex-row items-center gap-1">
         <Text className="text-sm font-semibold text-textHi">{value}</Text>
-        <Speaker text={value} />
+        <Speaker text={value} lang="it" />
       </View>
     </View>
   );
 }
 
 export default function AddWordScreen() {
+  const targetLang = useTargetLang();
+  const grammar = hasGrammar(targetLang); // conjugation/forms only for Italian
   const [query, setQuery] = useState('');
   const [searchLang, setSearchLang] = useState<SearchLang>('it');
   const [selected, setSelected] = useState<LexiconSuggestion | null>(null);
@@ -96,12 +99,13 @@ export default function AddWordScreen() {
   const [manualAux, setManualAux] = useState<Auxiliary>('avere');
 
   const effectivePos: Pos = selected?.pos ?? manualPos;
-  const isVerb = effectivePos === 'verb';
+  // Verb tense selection / conjugation UI only for languages with grammar (Italian)
+  const isVerb = effectivePos === 'verb' && grammar;
 
   const toggleTense = (t: Tense) =>
     setTenses((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
-  const search = useLexiconSearch(query, searchLang);
+  const search = useLexiconSearch(query, searchLang, targetLang);
   const addWord = useAddWord();
   const enrich = useEnrichWord();
   const myWords = useRecentWords();
@@ -146,10 +150,10 @@ export default function AddWordScreen() {
     const term = query.trim();
     if (!term) return;
     enrich.mutate(
-      { term, lang: searchLang },
+      { term, lang: searchLang, target: targetLang },
       {
         onSuccess: (s) => {
-          if (searchLang === 'en') setSearchLang('it'); // switch to show the Italian word
+          if (searchLang === 'en') setSearchLang('it'); // switch to show the target word
           pick(s); // treat the AI-added entry exactly like a dictionary match
           if (s.pos === 'verb') setTenses(['presente']);
         },
@@ -205,18 +209,18 @@ export default function AddWordScreen() {
           {/* Search input + language direction toggle */}
           <View className="mb-2 flex-row items-center justify-between">
             <Text className="text-sm font-semibold text-textLo">
-              {searchLang === 'it' ? 'Italian word' : 'Search in English'}
+              {searchLang === 'it' ? `${langInfo(targetLang).name} word` : 'Search in English'}
             </Text>
             <View className="flex-row gap-1.5">
               {(
                 [
-                  { key: 'it', label: 'IT 🇮🇹' },
+                  { key: 'it', label: `${targetLang.toUpperCase()} ${langInfo(targetLang).flag}` },
                   { key: 'en', label: 'EN 🇬🇧' },
                 ] as const
               ).map(({ key, label }) => (
                 <Pressable
                   key={key}
-                  accessibilityLabel={key === 'it' ? 'Search Italian words' : 'Search by English meaning'}
+                  accessibilityLabel={key === 'it' ? 'Search target-language words' : 'Search by English meaning'}
                   onPress={() => {
                     if (key !== searchLang) {
                       setSearchLang(key);
@@ -240,7 +244,9 @@ export default function AddWordScreen() {
                 setQuery(t);
                 if (selected && t !== selected.lemma) reset();
               }}
-              placeholder={searchLang === 'it' ? 'e.g. avere' : 'e.g. to have'}
+              placeholder={
+                searchLang === 'it' ? `a ${langInfo(targetLang).name} word…` : 'e.g. to have'
+              }
               placeholderTextColor={colors.textLo}
               autoCapitalize="none"
               autoCorrect={false}
@@ -334,7 +340,7 @@ export default function AddWordScreen() {
                     )}
                   </View>
                   <View className="flex-row items-center gap-1.5">
-                    <Speaker text={s.pos === 'noun' ? withArticle(s.lemma, s.gender) : s.lemma} />
+                    <Speaker text={s.pos === 'noun' ? withArticle(s.lemma, s.gender) : s.lemma} lang={targetLang} />
                     <Badge label={s.pos} />
                     {s.auxiliary ? <Badge label={s.auxiliary} tone="primary" /> : null}
                     {s.gender ? <Badge label={s.gender} /> : null}
@@ -521,7 +527,7 @@ export default function AddWordScreen() {
                           <Text className="text-sm font-semibold text-textHi">
                             {forms[p] ?? '—'}
                           </Text>
-                          {forms[p] ? <Speaker text={forms[p]!} /> : null}
+                          {forms[p] ? <Speaker text={forms[p]!} lang="it" /> : null}
                         </View>
                       </View>
                     ))}
@@ -531,8 +537,9 @@ export default function AddWordScreen() {
             </>
           )}
 
-          {/* Forms preview — nouns (sg/pl) and adjectives (gender × number) */}
-          {(() => {
+          {/* Forms preview — nouns (sg/pl) and adjectives (gender × number). Italian only. */}
+          {grammar &&
+            (() => {
             const lemma = (selected?.lemma ?? query).trim();
             if (lemma.length < 2) return null;
             const gender = selected?.gender ?? manualGender;

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { conjugateRegular } from '@/lib/conjugator';
 import type { Auxiliary, Cefr, Pos, Tense } from '@/lib/italian';
 import { PERSONS } from '@/lib/italian';
+import { useLangStore, useTargetLang } from '@/lib/lang';
 import { userWordSchema, type UserWord, type WordStatus } from '@/lib/schemas';
 import { ensureSession, getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -107,6 +108,7 @@ export function useAddWord() {
       const supabase = getSupabase();
       const { tenses, ...fields } = word;
       const lemma = fields.lemma.trim();
+      const target = useLangStore.getState().target ?? 'it';
 
       // Upsert: re-adding an existing word merges into it instead of duplicating
       // (DB also enforces unique user_id + lower(lemma) + pos)
@@ -114,6 +116,7 @@ export function useAddWord() {
         .from('user_words')
         .select('*')
         .eq('user_id', session!.user.id)
+        .eq('target_language', target)
         .eq('pos', fields.pos)
         .ilike('lemma', lemma) // case-insensitive equality (no wildcards)
         .maybeSingle();
@@ -144,7 +147,7 @@ export function useAddWord() {
           .insert({
             user_id: session!.user.id,
             source_language: 'en',
-            target_language: 'it',
+            target_language: target,
             ...fields,
             lemma,
           })
@@ -435,10 +438,11 @@ export function useConjugations(wordId: string) {
   });
 }
 
-/** All of the user's words (paged past PostgREST's 1000-row cap — no truncation). */
+/** The user's words for the active target language (paged past the 1000-row cap). */
 export function useRecentWords() {
+  const target = useTargetLang();
   return useQuery({
-    queryKey: ['user-words', 'recent'],
+    queryKey: ['user-words', 'recent', target],
     enabled: isSupabaseConfigured,
     queryFn: async () => {
       const supabase = getSupabase();
@@ -450,6 +454,7 @@ export function useRecentWords() {
         const { data, error } = await supabase
           .from('user_words')
           .select('*')
+          .eq('target_language', target)
           .order('created_at', { ascending: false })
           .range(from, from + 999);
         if (error) throw new Error(error.message);

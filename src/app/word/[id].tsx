@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { adjectiveForms, nounForms } from '@/lib/inflect';
+import { hasGrammar } from '@/lib/lang';
 import {
   PERSON_LABELS,
   PERSONS,
@@ -49,14 +50,14 @@ function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 
   );
 }
 
-/** Tap-to-listen speaker button (Italian TTS). */
-function Speaker({ text, size = 16 }: { text: string; size?: number }) {
+/** Tap-to-listen speaker button (TTS in the word's language). */
+function Speaker({ text, lang, size = 16 }: { text: string; lang: string; size?: number }) {
   if (!speechService.isAvailable) return null;
   return (
     <Pressable
       accessibilityLabel={`Listen to ${text}`}
       hitSlop={8}
-      onPress={() => speechService.speak(text, { language: 'it' })}
+      onPress={() => speechService.speak(text, { language: lang })}
       className="h-7 w-7 items-center justify-center">
       <Ionicons name="volume-medium-outline" size={size} color={colors.textLo} />
     </Pressable>
@@ -64,13 +65,14 @@ function Speaker({ text, size = 16 }: { text: string; size?: number }) {
 }
 
 function FormRow({ label, value, border }: { label: string; value: string; border?: boolean }) {
+  // Forms (noun/adjective inflection) are Italian-only.
   return (
     <View
       className={`flex-row items-center justify-between px-4 py-3 ${border ? 'border-t border-border' : ''}`}>
       <Text className="text-sm font-semibold text-textLo">{label}</Text>
       <View className="flex-row items-center gap-1">
         <Text className="text-base font-semibold text-textHi">{value}</Text>
-        <Speaker text={value} />
+        <Speaker text={value} lang="it" />
       </View>
     </View>
   );
@@ -142,15 +144,19 @@ export default function WordDetailScreen() {
         <View className="flex-1 pr-3">
           <View className="flex-row items-center gap-2">
             <Text className="text-3xl font-bold text-textHi">
-              {w.pos === 'noun' ? withArticle(w.lemma, w.gender) : w.lemma}
+              {hasGrammar(w.target_language) && w.pos === 'noun'
+                ? withArticle(w.lemma, w.gender)
+                : w.lemma}
             </Text>
             {speechService.isAvailable && (
               <Pressable
                 accessibilityLabel="Pronounce"
                 onPress={() =>
                   speechService.speak(
-                    w.pos === 'noun' ? withArticle(w.lemma, w.gender) : w.lemma,
-                    { language: 'it' },
+                    hasGrammar(w.target_language) && w.pos === 'noun'
+                      ? withArticle(w.lemma, w.gender)
+                      : w.lemma,
+                    { language: w.target_language },
                   )
                 }
                 className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
@@ -219,8 +225,9 @@ export default function WordDetailScreen() {
             })}
           </View>
 
-          {/* Inflected forms — nouns (sg/pl) and adjectives (gender × number) */}
-          {w.pos === 'noun' &&
+          {/* Inflected forms — nouns (sg/pl) and adjectives (gender × number). Italian only. */}
+          {hasGrammar(w.target_language) &&
+            w.pos === 'noun' &&
             (() => {
               const f = nounForms(w.lemma, w.gender);
               return (
@@ -234,7 +241,8 @@ export default function WordDetailScreen() {
               );
             })()}
 
-          {w.pos === 'adj' &&
+          {hasGrammar(w.target_language) &&
+            w.pos === 'adj' &&
             (() => {
               const f = adjectiveForms(w.lemma);
               return (
@@ -255,8 +263,8 @@ export default function WordDetailScreen() {
               );
             })()}
 
-          {/* Conjugation tables */}
-          {w.pos === 'verb' && (
+          {/* Conjugation tables — Italian only */}
+          {hasGrammar(w.target_language) && w.pos === 'verb' && (
             <View className="mt-2">
               <View className="mb-3 flex-row items-center justify-between">
                 <Text className="text-lg font-bold text-textHi">Conjugation</Text>
@@ -319,7 +327,7 @@ export default function WordDetailScreen() {
                         <Text className="text-sm font-semibold text-textLo">{PERSON_LABELS[p]}</Text>
                         <View className="flex-row items-center gap-1">
                           <Text className="text-base font-semibold text-textHi">{forms[p] ?? '—'}</Text>
-                          {forms[p] ? <Speaker text={forms[p]!} /> : null}
+                          {forms[p] ? <Speaker text={forms[p]!} lang="it" /> : null}
                         </View>
                       </View>
                     ))}
@@ -435,7 +443,7 @@ export default function WordDetailScreen() {
                             </Text>
                           </View>
                         ) : null}
-                        <Speaker text={ex.target_text} />
+                        <Speaker text={ex.target_text} lang={w.target_language} />
                       </View>
                     </View>
                     <Text className="mt-1 text-sm text-textLo">{ex.source_text}</Text>

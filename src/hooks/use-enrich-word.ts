@@ -5,8 +5,10 @@ import { getSupabase } from '@/lib/supabase';
 
 export interface EnrichInput {
   term: string;
-  /** 'it' = the term is an Italian word; 'en' = translate the English term first. */
+  /** 'it' = the term is in the target language; 'en' = translate the English term first. */
   lang: 'it' | 'en';
+  /** Target language to add the word to (default 'it'). */
+  target?: string;
 }
 
 /**
@@ -19,11 +21,11 @@ export interface EnrichInput {
  */
 export function useEnrichWord() {
   return useMutation<LexiconSuggestion, Error, EnrichInput>({
-    mutationFn: async ({ term, lang }: EnrichInput) => {
+    mutationFn: async ({ term, lang, target = 'it' }: EnrichInput) => {
       const body =
         lang === 'en'
-          ? { english: term.trim() }
-          : { lemma: term.trim(), target: 'it', source: 'en' };
+          ? { english: term.trim(), target }
+          : { lemma: term.trim(), target, source: 'en' };
       const { data, error } = await getSupabase().functions.invoke('enrich-word', { body });
       if (error) {
         const detail = (error as { context?: Response }).context;

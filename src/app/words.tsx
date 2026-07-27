@@ -5,6 +5,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { POS_LABELS, POS_VALUES, withArticle, type Pos } from '@/lib/italian';
+import { hasGrammar } from '@/lib/lang';
 import { useRecentWords, useToggleFlag } from '@/lib/words';
 import { colors } from '@/theme/tokens';
 
@@ -114,7 +115,9 @@ export default function WordsScreen() {
               }`}>
               <View className="flex-1 pr-3">
                 <Text className="text-base font-semibold text-textHi">
-                  {w.pos === 'noun' ? withArticle(w.lemma, w.gender) : w.lemma}
+                  {hasGrammar(w.target_language) && w.pos === 'noun'
+                    ? withArticle(w.lemma, w.gender)
+                    : w.lemma}
                 </Text>
                 <Text className="mt-0.5 text-xs text-textLo">{w.translation}</Text>
               </View>
