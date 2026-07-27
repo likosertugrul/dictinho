@@ -1,11 +1,13 @@
-// Text-to-Speech abstraction (Faz 7).
-// UI code must depend only on this interface so a real implementation
-// (expo-speech) can be swapped in later without touching call sites.
+// Text-to-Speech via the device / browser speech engine (expo-speech works on
+// iOS, Android and web). UI depends only on the SpeechService interface.
+
+import * as Speech from 'expo-speech';
+import { Platform } from 'react-native';
 
 export interface SpeakOptions {
   /** BCP-47 / ISO-639-1 language code, e.g. 'it' */
   language?: string;
-  /** 0.1 – 2.0, default 1.0 */
+  /** 0.1 – 2.0, default ~0.9 */
   rate?: number;
 }
 
@@ -15,17 +17,33 @@ export interface SpeechService {
   stop(): Promise<void>;
 }
 
-/** Placeholder implementation until expo-speech lands in Faz 7. */
-class NoopSpeechService implements SpeechService {
-  readonly isAvailable = false;
+class ExpoSpeechService implements SpeechService {
+  get isAvailable(): boolean {
+    // Native always has a TTS engine; web needs the SpeechSynthesis API.
+    if (Platform.OS !== 'web') return true;
+    return typeof window !== 'undefined' && 'speechSynthesis' in window;
+  }
 
-  async speak(_text: string, _options?: SpeakOptions): Promise<void> {
-    // no-op
+  async speak(text: string, options: SpeakOptions = {}): Promise<void> {
+    if (!text.trim() || !this.isAvailable) return;
+    try {
+      await Speech.stop(); // interrupt anything already playing
+    } catch {
+      /* ignore */
+    }
+    Speech.speak(text, {
+      language: options.language ?? 'it-IT',
+      rate: options.rate ?? 0.9,
+    });
   }
 
   async stop(): Promise<void> {
-    // no-op
+    try {
+      await Speech.stop();
+    } catch {
+      /* ignore */
+    }
   }
 }
 
-export const speechService: SpeechService = new NoopSpeechService();
+export const speechService: SpeechService = new ExpoSpeechService();

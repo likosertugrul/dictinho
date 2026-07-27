@@ -49,12 +49,29 @@ function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 
   );
 }
 
+/** Tap-to-listen speaker button (Italian TTS). */
+function Speaker({ text, size = 16 }: { text: string; size?: number }) {
+  if (!speechService.isAvailable) return null;
+  return (
+    <Pressable
+      accessibilityLabel={`Listen to ${text}`}
+      hitSlop={8}
+      onPress={() => speechService.speak(text, { language: 'it' })}
+      className="h-7 w-7 items-center justify-center">
+      <Ionicons name="volume-medium-outline" size={size} color={colors.textLo} />
+    </Pressable>
+  );
+}
+
 function FormRow({ label, value, border }: { label: string; value: string; border?: boolean }) {
   return (
     <View
       className={`flex-row items-center justify-between px-4 py-3 ${border ? 'border-t border-border' : ''}`}>
       <Text className="text-sm font-semibold text-textLo">{label}</Text>
-      <Text className="text-base font-semibold text-textHi">{value}</Text>
+      <View className="flex-row items-center gap-1">
+        <Text className="text-base font-semibold text-textHi">{value}</Text>
+        <Speaker text={value} />
+      </View>
     </View>
   );
 }
@@ -127,11 +144,15 @@ export default function WordDetailScreen() {
             <Text className="text-3xl font-bold text-textHi">
               {w.pos === 'noun' ? withArticle(w.lemma, w.gender) : w.lemma}
             </Text>
-            {/* TTS — wired up in Faz 7; hidden while unavailable */}
             {speechService.isAvailable && (
               <Pressable
                 accessibilityLabel="Pronounce"
-                onPress={() => speechService.speak(w.lemma, { language: 'it' })}
+                onPress={() =>
+                  speechService.speak(
+                    w.pos === 'noun' ? withArticle(w.lemma, w.gender) : w.lemma,
+                    { language: 'it' },
+                  )
+                }
                 className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
                 <Ionicons name="volume-medium" size={18} color={colors.textHi} />
               </Pressable>
@@ -296,7 +317,10 @@ export default function WordDetailScreen() {
                           i > 0 ? 'border-t border-border' : ''
                         }`}>
                         <Text className="text-sm font-semibold text-textLo">{PERSON_LABELS[p]}</Text>
-                        <Text className="text-base font-semibold text-textHi">{forms[p] ?? '—'}</Text>
+                        <View className="flex-row items-center gap-1">
+                          <Text className="text-base font-semibold text-textHi">{forms[p] ?? '—'}</Text>
+                          {forms[p] ? <Speaker text={forms[p]!} /> : null}
+                        </View>
                       </View>
                     ))}
                   </View>
@@ -403,13 +427,16 @@ export default function WordDetailScreen() {
                       <Text className="flex-1 text-base font-semibold text-textHi">
                         {ex.target_text}
                       </Text>
-                      {ex.tense ? (
-                        <View className="rounded-full bg-surfaceAlt px-2 py-0.5">
-                          <Text className="text-[10px] font-semibold text-textLo">
-                            {TENSE_LABELS[ex.tense as Tense] ?? ex.tense}
-                          </Text>
-                        </View>
-                      ) : null}
+                      <View className="flex-row items-center gap-1">
+                        {ex.tense ? (
+                          <View className="rounded-full bg-surfaceAlt px-2 py-0.5">
+                            <Text className="text-[10px] font-semibold text-textLo">
+                              {TENSE_LABELS[ex.tense as Tense] ?? ex.tense}
+                            </Text>
+                          </View>
+                        ) : null}
+                        <Speaker text={ex.target_text} />
+                      </View>
                     </View>
                     <Text className="mt-1 text-sm text-textLo">{ex.source_text}</Text>
                   </View>
