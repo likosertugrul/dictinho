@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -44,4 +45,20 @@ export const useLangStore = create<LangState>()(
 /** The active target language, defaulting to Italian until a choice is made. */
 export function useTargetLang(): LangCode {
   return useLangStore((s) => s.target) ?? 'it';
+}
+
+/** True once the persisted language state has loaded from storage. */
+export function useLangHydrated(): boolean {
+  const [hydrated, setHydrated] = useState<boolean>(
+    () => useLangStore.persist?.hasHydrated?.() ?? true,
+  );
+  useEffect(() => {
+    if (useLangStore.persist?.hasHydrated?.()) {
+      setHydrated(true);
+      return;
+    }
+    const unsub = useLangStore.persist?.onFinishHydration?.(() => setHydrated(true));
+    return unsub;
+  }, []);
+  return hydrated;
 }
