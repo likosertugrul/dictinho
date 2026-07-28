@@ -3,9 +3,7 @@
   "buildCommand": "expo export -p web",
   "outputDirectory": "dist",
   "framework": null,
-  "cleanUrls": true,
-  "trailingSlash": false,
-  "rewrites": [{ "source": "/word/:id", "destination": "/word/[id]" }],
+  "rewrites": [{ "source": "/((?!_expo/|assets/|favicon).*)", "destination": "/index.html" }],
   "headers": [
     {
       "source": "/_expo/static/(.*)",
