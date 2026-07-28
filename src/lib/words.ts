@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { conjugateRegular } from '@/lib/conjugator';
 import type { Auxiliary, Cefr, Pos, Tense } from '@/lib/italian';
 import { PERSONS } from '@/lib/italian';
-import { useLangStore, useTargetLang } from '@/lib/lang';
+import { currentLangs, useTargetLang } from '@/lib/lang';
 import { userWordSchema, type UserWord, type WordStatus } from '@/lib/schemas';
 import { ensureSession, getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -108,7 +108,7 @@ export function useAddWord() {
       const supabase = getSupabase();
       const { tenses, ...fields } = word;
       const lemma = fields.lemma.trim();
-      const target = useLangStore.getState().target ?? 'it';
+      const { target, source } = currentLangs();
 
       // Upsert: re-adding an existing word merges into it instead of duplicating
       // (DB also enforces unique user_id + lower(lemma) + pos)
@@ -146,7 +146,7 @@ export function useAddWord() {
           .from('user_words')
           .insert({
             user_id: session!.user.id,
-            source_language: 'en',
+            source_language: source,
             target_language: target,
             ...fields,
             lemma,

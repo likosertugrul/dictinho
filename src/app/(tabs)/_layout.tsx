@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
 
-import { useLangHydrated, useLangStore } from '@/lib/lang';
+import { useLangChosen, useLangHydrated } from '@/lib/lang';
 import { colors } from '@/theme/tokens';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -15,7 +15,7 @@ function tabIcon(name: IconName) {
 
 export default function TabsLayout() {
   const hydrated = useLangHydrated();
-  const chosen = useLangStore((s) => s.chosen);
+  const chosen = useLangChosen();
 
   // First-time users pick a language before entering the app.
   if (hydrated && !chosen) {

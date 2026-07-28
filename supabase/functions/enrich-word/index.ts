@@ -124,8 +124,17 @@ Deno.serve(async (req) => {
       });
     }
     const lemma = inputTerm.toLowerCase();
-    const LANG_NAME: Record<string, string> = { it: 'Italian', es: 'Spanish', en: 'English' };
+    const LANG_NAME: Record<string, string> = {
+      it: 'Italian',
+      es: 'Spanish',
+      en: 'English',
+      tr: 'Turkish',
+      fr: 'French',
+      de: 'German',
+      pt: 'Portuguese',
+    };
     const langName = LANG_NAME[target] ?? 'Italian';
+    const srcName = LANG_NAME[source] ?? 'English';
     const auxNote =
       target === 'it'
         ? `"auxiliary": "essere"|"avere"|null (verbs only, passato prossimo auxiliary), `
@@ -140,7 +149,7 @@ Deno.serve(async (req) => {
     //    - target word   → validate + classify it
     //    - English word  → translate to the most common target-language word
     const userPrompt = fromEnglish
-      ? `The English word or phrase is "${inputTerm}". Give the single most common ${langName} ` +
+      ? `The ${srcName} word or phrase is "${inputTerm}". Give the single most common ${langName} ` +
         `dictionary word for it. Respond as JSON: ` +
         `{"valid": true|false (false if not translatable to a real ${langName} word), ` +
         `"lemma": "the ${langName} dictionary form, lowercase, infinitive for verbs, singular for nouns", ` +
@@ -148,14 +157,14 @@ Deno.serve(async (req) => {
         `"gender": "m"|"f"|null (nouns only), ` +
         auxNote +
         `"is_irregular": true|false, "cefr": "A1".."C2", ` +
-        `"translations": ["1-3 accurate English translations, including \\"${inputTerm}\\""]}`
+        `"translations": ["1-3 accurate ${srcName} translations, including \\"${inputTerm}\\""]}`
       : `Analyze the ${langName} word "${inputTerm}". Respond as JSON: ` +
         `{"valid": true|false, "lemma": "dictionary form, lowercase, infinitive for verbs, singular for nouns", ` +
         `"pos": "verb"|"noun"|"adj"|"adv"|"prep"|"pron"|"conj"|"interj"|"phrase", ` +
         `"gender": "m"|"f"|null (nouns only), ` +
         auxNote +
         `"is_irregular": true|false, "cefr": "A1".."C2", ` +
-        `"translations": ["1-3 accurate English translations"]}`;
+        `"translations": ["1-3 accurate ${srcName} translations"]}`;
 
     const info = await groqJson([
       {

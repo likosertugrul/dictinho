@@ -18,7 +18,7 @@ import { useEnrichWord } from '@/hooks/use-enrich-word';
 import { useLexiconSearch, type SearchLang } from '@/hooks/use-lexicon-search';
 import { conjugateRegular } from '@/lib/conjugator';
 import { adjectiveForms, nounForms } from '@/lib/inflect';
-import { hasGrammar, langInfo, useTargetLang } from '@/lib/lang';
+import { hasGrammar, langInfo, useSourceLang, useTargetLang } from '@/lib/lang';
 import {
   AUXILIARIES,
   matchesLemma,
@@ -81,6 +81,7 @@ function PreviewRow({ label, value, border }: { label: string; value: string; bo
 
 export default function AddWordScreen() {
   const targetLang = useTargetLang();
+  const sourceLang = useSourceLang();
   const grammar = hasGrammar(targetLang); // conjugation/forms only for Italian
   const [query, setQuery] = useState('');
   const [searchLang, setSearchLang] = useState<SearchLang>('it');
@@ -150,7 +151,7 @@ export default function AddWordScreen() {
     const term = query.trim();
     if (!term) return;
     enrich.mutate(
-      { term, lang: searchLang, target: targetLang },
+      { term, lang: searchLang, target: targetLang, source: sourceLang },
       {
         onSuccess: (s) => {
           if (searchLang === 'en') setSearchLang('it'); // switch to show the target word
@@ -209,13 +210,18 @@ export default function AddWordScreen() {
           {/* Search input + language direction toggle */}
           <View className="mb-2 flex-row items-center justify-between">
             <Text className="text-sm font-semibold text-textLo">
-              {searchLang === 'it' ? `${langInfo(targetLang).name} word` : 'Search in English'}
+              {searchLang === 'it'
+                ? `${langInfo(targetLang).name} word`
+                : `Search in ${langInfo(sourceLang).name}`}
             </Text>
             <View className="flex-row gap-1.5">
               {(
                 [
                   { key: 'it', label: `${targetLang.toUpperCase()} ${langInfo(targetLang).flag}` },
-                  { key: 'en', label: 'EN 🇬🇧' },
+                  {
+                    key: 'en',
+                    label: `${sourceLang.toUpperCase()} ${langInfo(sourceLang).flag}`,
+                  },
                 ] as const
               ).map(({ key, label }) => (
                 <Pressable

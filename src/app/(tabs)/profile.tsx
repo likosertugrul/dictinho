@@ -14,26 +14,28 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuthUser } from '@/hooks/use-auth';
-import { langInfo, useTargetLang } from '@/lib/lang';
+import { langInfo, useSourceLang, useTargetLang } from '@/lib/lang';
 import { getSupabase } from '@/lib/supabase';
 import { colors } from '@/theme/tokens';
 
 type Mode = 'create' | 'signin';
 
 function LanguageCard() {
-  const target = useTargetLang();
-  const info = langInfo(target);
+  const target = langInfo(useTargetLang());
+  const source = langInfo(useSourceLang());
   return (
     <Pressable
-      accessibilityLabel="Change learning language"
+      accessibilityLabel="Change languages"
       onPress={() => router.push('/onboarding/language')}
       className="mt-4 flex-row items-center gap-3 rounded-card bg-surface p-4">
       <View className="h-11 w-11 items-center justify-center rounded-full bg-surfaceAlt">
-        <Text className="text-2xl">{info.flag}</Text>
+        <Text className="text-2xl">{target.flag}</Text>
       </View>
       <View className="flex-1">
-        <Text className="text-xs text-textLo">Learning</Text>
-        <Text className="text-base font-bold text-textHi">{info.name}</Text>
+        <Text className="text-xs text-textLo">
+          Learning · from {source.name}
+        </Text>
+        <Text className="text-base font-bold text-textHi">{target.name}</Text>
       </View>
       <Text className="mr-1 text-xs font-semibold text-primary">Change</Text>
       <Ionicons name="chevron-forward" size={18} color={colors.textLo} />
