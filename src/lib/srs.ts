@@ -59,9 +59,14 @@ const cardSchema = z.object({
   repetitions: z.number(),
   due_at: z.string(),
   last_rating: z.number().nullable().default(null),
+  wrong_count: z.number().default(0),
 });
 
-const CARD_COLS = 'id, ref_id, ease_factor, interval_days, repetitions, due_at, last_rating';
+const CARD_COLS =
+  'id, ref_id, ease_factor, interval_days, repetitions, due_at, last_rating, wrong_count';
+
+/** Words wrong this many times count as "tough". */
+export const TOUGH_THRESHOLD = 3;
 
 export interface DueCard {
   card: z.infer<typeof cardSchema>;
@@ -84,8 +89,9 @@ function meaningTokens(translation: string): string[] {
  * 'due'     → cards scheduled for today
  * 'flagged' → all starred words, anytime
  * 'wrong'   → words whose last answer was wrong (mistakes list), anytime
+ * 'tough'   → words answered wrong many times (>= TOUGH_THRESHOLD), anytime
  */
-export type PracticeMode = 'due' | 'flagged' | 'wrong';
+export type PracticeMode = 'due' | 'flagged' | 'wrong' | 'tough';
 
 export function useDueCards(mode: PracticeMode = 'due', pos?: string, includeKnown = false) {
   const target = useTargetLang();
@@ -163,6 +169,7 @@ export function useDueCards(mode: PracticeMode = 'due', pos?: string, includeKno
         const w = wordById.get(c.ref_id);
         if (!w) return false;
         if (pos && w.pos !== pos) return false; // optional word-class focus
+        if (mode === 'tough') return c.wrong_count >= TOUGH_THRESHOLD;
         if (mode === 'wrong') return c.last_rating != null && c.last_rating < 3;
         if (mode === 'flagged') return w.flagged;
         // 'due' drills words you're still learning — skip known unless asked
@@ -198,6 +205,7 @@ export function useReviewCard() {
           due_at: dueAt,
           last_reviewed: new Date().toISOString(),
           last_rating: quality,
+          wrong_count: card.wrong_count + (quality < 3 ? 1 : 0),
         })
         .eq('id', card.id);
       if (error) throw new Error(error.message);
@@ -208,40 +216,48 @@ export function useReviewCard() {
   });
 }
 
+async function fetchCardWords(target: string, kind: 'wrong' | 'tough'): Promise<UserWord[]> {
+  const supabase = getSupabase();
+  const { data: s } = await supabase.auth.getSession();
+  if (!s.session) return [];
+
+  const base = supabase.from('srs_cards').select('ref_id, last_reviewed').eq('card_type', 'word');
+  const { data: cards, error } =
+    kind === 'tough' ? await base.gte('wrong_count', TOUGH_THRESHOLD) : await base.lt('last_rating', 3);
+  if (error) throw new Error(error.message);
+  const rows = (cards ?? []) as { ref_id: string; last_reviewed: string | null }[];
+  if (rows.length === 0) return [];
+
+  const { data: wordsRaw, error: wErr } = await supabase
+    .from('user_words')
+    .select('*')
+    .eq('target_language', target)
+    .in(
+      'id',
+      rows.map((r) => r.ref_id),
+    );
+  if (wErr) throw new Error(wErr.message);
+  const words = z.array(userWordSchema).parse(wordsRaw ?? []);
+  const reviewedAt = new Map(rows.map((r) => [r.ref_id, r.last_reviewed ?? '']));
+  return words.sort((a, b) => (reviewedAt.get(b.id) ?? '').localeCompare(reviewedAt.get(a.id) ?? ''));
+}
+
 /** Words whose last review was wrong (rating < 3) — the mistakes list. */
 export function useWrongWords() {
   const target = useTargetLang();
   return useQuery({
     queryKey: ['srs', 'wrong-list', target],
     enabled: isSupabaseConfigured,
-    queryFn: async (): Promise<UserWord[]> => {
-      const supabase = getSupabase();
-      const { data: s } = await supabase.auth.getSession();
-      if (!s.session) return [];
+    queryFn: () => fetchCardWords(target, 'wrong'),
+  });
+}
 
-      const { data: cards, error } = await supabase
-        .from('srs_cards')
-        .select('ref_id, last_reviewed')
-        .eq('card_type', 'word')
-        .lt('last_rating', 3);
-      if (error) throw new Error(error.message);
-      const rows = (cards ?? []) as { ref_id: string; last_reviewed: string | null }[];
-      if (rows.length === 0) return [];
-
-      const { data: wordsRaw, error: wErr } = await supabase
-        .from('user_words')
-        .select('*')
-        .eq('target_language', target)
-        .in(
-          'id',
-          rows.map((r) => r.ref_id),
-        );
-      if (wErr) throw new Error(wErr.message);
-      const words = z.array(userWordSchema).parse(wordsRaw ?? []);
-
-      // Most recently missed first
-      const reviewedAt = new Map(rows.map((r) => [r.ref_id, r.last_reviewed ?? '']));
-      return words.sort((a, b) => (reviewedAt.get(b.id) ?? '').localeCompare(reviewedAt.get(a.id) ?? ''));
-    },
+/** Words answered wrong many times (>= threshold) — the "tough words" list. */
+export function useToughWords() {
+  const target = useTargetLang();
+  return useQuery({
+    queryKey: ['srs', 'tough-list', target],
+    enabled: isSupabaseConfigured,
+    queryFn: () => fetchCardWords(target, 'tough'),
   });
 }

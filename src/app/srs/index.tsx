@@ -22,7 +22,13 @@ export default function SrsScreen() {
   const { mode: modeParam, pos: posParam, known: knownParam } =
     useLocalSearchParams<{ mode?: string; pos?: string; known?: string }>();
   const mode: PracticeMode =
-    modeParam === 'flagged' ? 'flagged' : modeParam === 'wrong' ? 'wrong' : 'due';
+    modeParam === 'flagged'
+      ? 'flagged'
+      : modeParam === 'wrong'
+        ? 'wrong'
+        : modeParam === 'tough'
+          ? 'tough'
+          : 'due';
   const pos = posParam && posParam !== 'all' ? posParam : undefined;
   const due = useDueCards(mode, pos, knownParam === '1');
   const review = useReviewCard();

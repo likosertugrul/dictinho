@@ -6,63 +6,115 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { POS_LABELS, POS_VALUES, withArticle, type Pos } from '@/lib/italian';
 import { hasGrammar } from '@/lib/lang';
+import type { UserWord } from '@/lib/schemas';
+import { useToughWords, useWrongWords } from '@/lib/srs';
 import { useRecentWords, useToggleFlag } from '@/lib/words';
 import { colors } from '@/theme/tokens';
 
-const norm = (s: string) =>
-  s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+
+type ListKind = 'learning' | 'known' | 'starred' | 'mistakes' | 'tough';
+
+const META: Record<ListKind, { title: string; practiceMode?: string }> = {
+  learning: { title: 'To learn' },
+  known: { title: 'Known' },
+  starred: { title: 'Starred', practiceMode: 'flagged' },
+  mistakes: { title: 'Mistakes', practiceMode: 'wrong' },
+  tough: { title: 'Tough words', practiceMode: 'tough' },
+};
 
 export default function WordsScreen() {
-  const { status } = useLocalSearchParams<{ status?: string }>();
+  const params = useLocalSearchParams<{ status?: string; list?: string }>();
+  const kind: ListKind = (params.list ??
+    (params.status === 'known' ? 'known' : 'learning')) as ListKind;
+  const meta = META[kind] ?? META.learning;
+
   const recent = useRecentWords();
+  const wrong = useWrongWords();
+  const tough = useToughWords();
   const toggleFlag = useToggleFlag();
+
   const [q, setQ] = useState('');
   const [posFilter, setPosFilter] = useState<Pos | 'all'>('all');
+  const [sortKey, setSortKey] = useState<'recent' | 'alpha'>('recent');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  const wantKnown = status === 'known';
-  const title = wantKnown ? 'Known' : 'To learn';
+  const pickSort = (key: 'recent' | 'alpha') => {
+    if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(key);
+      setSortDir(key === 'recent' ? 'desc' : 'asc');
+    }
+  };
 
-  // All words of this status (for pos filter chips + counts)
-  const statusWords = useMemo(
-    () =>
-      (recent.data ?? []).filter((w) =>
-        wantKnown ? w.status === 'known' : w.status === 'learning',
-      ),
-    [recent.data, wantKnown],
-  );
-  const availablePos = POS_VALUES.filter((p) => statusWords.some((w) => w.pos === p));
+  // Base set for this list
+  const baseWords: UserWord[] = useMemo(() => {
+    const all = recent.data ?? [];
+    switch (kind) {
+      case 'known':
+        return all.filter((w) => w.status === 'known');
+      case 'starred':
+        return all.filter((w) => w.flagged);
+      case 'mistakes':
+        return wrong.data ?? [];
+      case 'tough':
+        return tough.data ?? [];
+      default:
+        return all.filter((w) => w.status === 'learning');
+    }
+  }, [kind, recent.data, wrong.data, tough.data]);
+
+  const availablePos = POS_VALUES.filter((p) => baseWords.some((w) => w.pos === p));
   const activePos = posFilter !== 'all' && !availablePos.includes(posFilter) ? 'all' : posFilter;
 
   const list = useMemo(() => {
     const needle = norm(q.trim());
-    return statusWords
+    return baseWords
       .filter((w) => (activePos === 'all' ? true : w.pos === activePos))
       .filter((w) => (needle ? norm(`${w.lemma} ${w.translation}`).includes(needle) : true))
       .slice()
-      .sort((a, b) => a.lemma.localeCompare(b.lemma, 'it'));
-  }, [statusWords, activePos, q]);
+      .sort((a, b) => {
+        const cmp =
+          sortKey === 'alpha'
+            ? a.lemma.localeCompare(b.lemma, 'it')
+            : a.created_at.localeCompare(b.created_at);
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+  }, [baseWords, activePos, q, sortKey, sortDir]);
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+      {/* Header */}
       <View className="flex-row items-center justify-between px-5 py-3">
         <Text className="text-2xl font-bold text-textHi">
-          {title} ({list.length})
+          {meta.title} ({list.length})
         </Text>
-        <Pressable
-          accessibilityLabel="Close"
-          onPress={() => router.back()}
-          className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
-          <Ionicons name="close" size={20} color={colors.textHi} />
-        </Pressable>
+        <View className="flex-row items-center gap-2">
+          {meta.practiceMode && baseWords.length > 0 && (
+            <Pressable
+              accessibilityLabel={`Practice ${meta.title}`}
+              onPress={() => router.push(`/srs?mode=${meta.practiceMode}` as `/srs`)}
+              className="flex-row items-center gap-1 rounded-full bg-primary px-3.5 py-1.5">
+              <Ionicons name="albums" size={13} color={colors.onPrimary} />
+              <Text className="text-xs font-bold text-white">Practice</Text>
+            </Pressable>
+          )}
+          <Pressable
+            accessibilityLabel="Close"
+            onPress={() => router.back()}
+            className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
+            <Ionicons name="close" size={20} color={colors.textHi} />
+          </Pressable>
+        </View>
       </View>
 
-      {/* Search */}
+      {/* Search + sort */}
       <View className="mx-5 mb-3 flex-row items-center gap-2 rounded-2xl bg-surface px-3">
         <Ionicons name="search" size={16} color={colors.textLo} />
         <TextInput
           value={q}
           onChangeText={setQ}
-          placeholder={`Search ${title}…`}
+          placeholder={`Search ${meta.title}…`}
           placeholderTextColor={colors.textLo}
           autoCapitalize="none"
           autoCorrect={false}
@@ -75,6 +127,35 @@ export default function WordsScreen() {
         )}
       </View>
 
+      <View className="mb-3 flex-row gap-1.5 px-5">
+        {(
+          [
+            { key: 'recent', label: 'Date', icon: 'time-outline' },
+            { key: 'alpha', label: 'A–Z', icon: 'text-outline' },
+          ] as const
+        ).map(({ key, label, icon }) => {
+          const active = sortKey === key;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => pickSort(key)}
+              className={`flex-row items-center gap-1 rounded-full px-3 py-1.5 ${active ? 'bg-primary' : 'bg-surfaceAlt'}`}>
+              <Ionicons name={icon} size={13} color={active ? colors.onPrimary : colors.textLo} />
+              <Text className={`text-xs font-semibold ${active ? 'text-white' : 'text-textLo'}`}>
+                {label}
+              </Text>
+              {active && (
+                <Ionicons
+                  name={sortDir === 'asc' ? 'arrow-up' : 'arrow-down'}
+                  size={12}
+                  color={colors.onPrimary}
+                />
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+
       {/* Word-class filter */}
       {availablePos.length > 1 && (
         <ScrollView
@@ -85,9 +166,8 @@ export default function WordsScreen() {
           <Pressable
             onPress={() => setPosFilter('all')}
             className={`rounded-full px-4 py-1.5 ${activePos === 'all' ? 'bg-primary' : 'bg-surfaceAlt'}`}>
-            <Text
-              className={`text-sm font-semibold ${activePos === 'all' ? 'text-white' : 'text-textLo'}`}>
-              All ({statusWords.length})
+            <Text className={`text-sm font-semibold ${activePos === 'all' ? 'text-white' : 'text-textLo'}`}>
+              All ({baseWords.length})
             </Text>
           </Pressable>
           {availablePos.map((p) => (
@@ -95,9 +175,8 @@ export default function WordsScreen() {
               key={p}
               onPress={() => setPosFilter(p)}
               className={`rounded-full px-4 py-1.5 ${activePos === p ? 'bg-primary' : 'bg-surfaceAlt'}`}>
-              <Text
-                className={`text-sm font-semibold ${activePos === p ? 'text-white' : 'text-textLo'}`}>
-                {POS_LABELS[p]} ({statusWords.filter((w) => w.pos === p).length})
+              <Text className={`text-sm font-semibold ${activePos === p ? 'text-white' : 'text-textLo'}`}>
+                {POS_LABELS[p]} ({baseWords.filter((w) => w.pos === p).length})
               </Text>
             </Pressable>
           ))}
@@ -110,9 +189,7 @@ export default function WordsScreen() {
             <Pressable
               key={w.id}
               onPress={() => router.push(`/word/${w.id}`)}
-              className={`flex-row items-center justify-between px-4 py-3 ${
-                i > 0 ? 'border-t border-border' : ''
-              }`}>
+              className={`flex-row items-center justify-between px-4 py-3 ${i > 0 ? 'border-t border-border' : ''}`}>
               <View className="flex-1 pr-3">
                 <Text className="text-base font-semibold text-textHi">
                   {hasGrammar(w.target_language) && w.pos === 'noun'

@@ -99,6 +99,7 @@ type SrsCardRow = {
   due_at: string;
   last_reviewed: string | null;
   last_rating: number | null;
+  wrong_count: number;
 };
 
 type SrsReviewRow = {
