@@ -72,6 +72,9 @@ export const userWordSchema = z.object({
   notes: z.string().nullable(),
   flagged: z.boolean().default(false),
   status: z.enum(['learning', 'known']).default('learning'),
+  // AI-corrected inflected forms (override for the rule-based inflection).
+  // Nouns: {singular, plural}. Adjectives: {m_sg, f_sg, m_pl, f_pl}.
+  forms: z.record(z.string(), z.string()).nullable().default(null),
   created_at: z.string(),
 });
 export type UserWord = z.infer<typeof userWordSchema>;

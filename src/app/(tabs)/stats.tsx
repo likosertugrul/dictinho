@@ -5,6 +5,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { POS_LABELS, POS_VALUES, type Pos } from '@/lib/italian';
+import { hasGrammar } from '@/lib/lang';
 import { useToughWords, useWrongWords } from '@/lib/srs';
 import { useRecentWords } from '@/lib/words';
 import { colors } from '@/theme/tokens';
@@ -23,6 +24,9 @@ export default function PracticeScreen() {
   const mistakesCount = wrong.data?.length ?? 0;
   const toughCount = tough.data?.length ?? 0;
   const hasKnown = words.some((w) => w.status === 'known');
+  const articleNouns = words.filter(
+    (w) => hasGrammar(w.target_language) && w.pos === 'noun' && w.gender != null,
+  ).length;
 
   const availablePos = POS_VALUES.filter((p) => words.some((w) => w.pos === p));
 
@@ -117,6 +121,25 @@ export default function PracticeScreen() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.onPrimary} />
             </Pressable>
+
+            {/* Article drill — multiple-choice il/lo/la/i/gli/le (Italian nouns) */}
+            {articleNouns > 0 && (
+              <Pressable
+                accessibilityLabel="Practice articles"
+                onPress={() => router.push('/srs/articles')}
+                className="mb-4 flex-row items-center gap-3 rounded-card bg-surface p-4">
+                <View className="h-11 w-11 items-center justify-center rounded-full bg-surfaceAlt">
+                  <Ionicons name="pricetags" size={20} color={colors.primary} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-base font-bold text-textHi">Article drill</Text>
+                  <Text className="text-xs text-textLo">
+                    Pick the right article · {articleNouns} noun{articleNouns === 1 ? '' : 's'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textLo} />
+              </Pressable>
+            )}
 
             <Text className="mb-2 text-sm font-semibold text-textLo">Lists</Text>
 

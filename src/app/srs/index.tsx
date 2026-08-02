@@ -6,17 +6,30 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ArticleInfo } from '@/components/article-info';
+import { Speaker } from '@/components/speaker';
+import { WordCardModal } from '@/components/word-card-modal';
 import { matchesLemma, withArticle } from '@/lib/italian';
 import { hasGrammar } from '@/lib/lang';
+import type { UserWord } from '@/lib/schemas';
 import { useDueCards, useReviewCard, type DueCard, type PracticeMode, type Rating } from '@/lib/srs';
 import { useToggleFlag } from '@/lib/words';
+import { speechService } from '@/services/speech';
 import { colors } from '@/theme/tokens';
+
+/** What the learner should have written — nouns are drilled with their article. */
+function answerText(word: UserWord): string {
+  return hasGrammar(word.target_language) && word.pos === 'noun'
+    ? withArticle(word.lemma, word.gender)
+    : word.lemma;
+}
 
 export default function SrsScreen() {
   const { mode: modeParam, pos: posParam, known: knownParam } =
@@ -40,6 +53,7 @@ export default function SrsScreen() {
   const [revealed, setRevealed] = useState(false);
   const [wasCorrect, setWasCorrect] = useState(false);
   const [reviewed, setReviewed] = useState(0);
+  const [cardOpen, setCardOpen] = useState(false);
   const initialTotal = useMemo(() => due.data?.length ?? 0, [due.data]);
 
   useEffect(() => {
@@ -58,18 +72,21 @@ export default function SrsScreen() {
     );
   };
 
+  // Reveal always pronounces the answer — hearing it is half the point.
+  const reveal = (correct: boolean) => {
+    if (!current) return;
+    setWasCorrect(correct);
+    setRevealed(true);
+    speechService.speak(answerText(current.word), { language: current.word.target_language });
+  };
+
   const check = () => {
     if (!current || !guess.trim()) return;
     // Accept any Italian word that shares this English meaning (what → che/cosa/…)
-    setWasCorrect(current.accept.some((lemma) => matchesLemma(guess, lemma)));
-    setRevealed(true);
+    reveal(current.accept.some((lemma) => matchesLemma(guess, lemma)));
   };
 
-  const giveUp = () => {
-    if (!current) return;
-    setWasCorrect(false);
-    setRevealed(true);
-  };
+  const giveUp = () => reveal(false);
 
   const next = (rating: Rating) => {
     if (!current) return;
@@ -77,6 +94,7 @@ export default function SrsScreen() {
     setReviewed((n) => n + 1);
     setGuess('');
     setRevealed(false);
+    setCardOpen(false);
     setQueue((q) => {
       const [head, ...rest] = q;
       // Wrong answers ("again") cycle back into this session
@@ -127,10 +145,7 @@ export default function SrsScreen() {
   }
 
   const { word } = current;
-  const answer =
-    hasGrammar(word.target_language) && word.pos === 'noun'
-      ? withArticle(word.lemma, word.gender)
-      : word.lemma;
+  const answer = answerText(word);
   // Synonyms accepted besides the card's own word (e.g. what → cosa, che cosa)
   const otherAccepted = current.accept.filter((l) => l !== word.lemma);
   const done = reviewed;
@@ -143,7 +158,10 @@ export default function SrsScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Header title={mode === 'flagged' ? 'Starred words' : 'Flashcards'} progress={{ done, total }} />
 
-        <View className="flex-1 justify-center px-5">
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="grow justify-center px-5 py-2"
+          keyboardShouldPersistTaps="handled">
           {/* Prompt: English meaning → guess the Italian word */}
           <View className="items-center rounded-card bg-surface px-6 py-10">
             {/* Star / add to drill list */}
@@ -205,8 +223,22 @@ export default function SrsScreen() {
                     {wasCorrect ? 'Correct!' : 'Not quite'}
                   </Text>
                 </View>
-                {/* The right answer */}
-                <Text className="mt-3 text-2xl font-bold text-textHi">{answer}</Text>
+                {/* The right answer — tap it to open the full word card */}
+                <View className="mt-3 flex-row items-center gap-2">
+                  <Pressable
+                    accessibilityLabel={`Open the card for ${answer}`}
+                    onPress={() => setCardOpen(true)}
+                    className="flex-row items-center gap-1.5">
+                    <Text className="text-2xl font-bold text-textHi">{answer}</Text>
+                    <Ionicons name="information-circle-outline" size={18} color={colors.textLo} />
+                  </Pressable>
+                  <Speaker
+                    text={answer}
+                    lang={word.target_language}
+                    variant="chip"
+                    label="Listen to the answer"
+                  />
+                </View>
                 {!wasCorrect && guess.trim().length > 0 && (
                   <Text className="mt-1 text-sm text-textLo">you wrote: {guess.trim()}</Text>
                 )}
@@ -221,10 +253,20 @@ export default function SrsScreen() {
                     <Badge label={`aux: ${word.auxiliary}`} tone="primary" />
                   </View>
                 ) : null}
+
+                {/* Nouns: all the articles, now that the answer is out */}
+                <ArticleInfo word={word} tone="surfaceAlt" className="mt-5" />
+
+                <Pressable
+                  onPress={() => setCardOpen(true)}
+                  className="mt-4 flex-row items-center gap-1.5 rounded-full bg-surfaceAlt px-4 py-2">
+                  <Ionicons name="albums-outline" size={14} color={colors.textHi} />
+                  <Text className="text-xs font-bold text-textHi">Open word card</Text>
+                </Pressable>
               </View>
             )}
           </View>
-        </View>
+        </ScrollView>
 
         {/* Actions */}
         <View className="px-5 pb-2 pt-2">
@@ -268,6 +310,9 @@ export default function SrsScreen() {
           )}
         </View>
       </KeyboardAvoidingView>
+
+      {/* Word card over the session (state is kept, so the drill resumes on close) */}
+      <WordCardModal wordId={cardOpen ? word.id : null} onClose={() => setCardOpen(false)} />
     </SafeAreaView>
   );
 }

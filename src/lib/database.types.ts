@@ -17,11 +17,12 @@ type UserWordRow = {
   notes: string | null;
   flagged: boolean;
   status: string;
+  forms: Record<string, string> | null;
   created_at: string;
 };
 
-type UserWordInsert = Omit<UserWordRow, 'id' | 'created_at' | 'flagged' | 'status'> &
-  Partial<Pick<UserWordRow, 'id' | 'created_at' | 'flagged' | 'status'>>;
+type UserWordInsert = Omit<UserWordRow, 'id' | 'created_at' | 'flagged' | 'status' | 'forms'> &
+  Partial<Pick<UserWordRow, 'id' | 'created_at' | 'flagged' | 'status' | 'forms'>>;
 
 type LexiconEntryRow = {
   id: string;

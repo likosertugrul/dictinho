@@ -92,10 +92,69 @@ async function conjugateTables(lemma: string, aux: string): Promise<Record<strin
   throw new Error('could not generate complete conjugations');
 }
 
+async function inflectForms(
+  lemma: string,
+  pos: string,
+  gender: string | null,
+): Promise<Record<string, string>> {
+  const isNoun = pos === 'noun';
+  const shape = isNoun
+    ? `{"singular":"...","plural":"..."}`
+    : `{"m_sg":"...","f_sg":"...","m_pl":"...","f_pl":"..."}`;
+  const rules = isNoun
+    ? `Give the correct singular and plural of the ${gender === 'f' ? 'feminine' : gender === 'm' ? 'masculine' : ''} noun. ` +
+      `Watch for invariable nouns (la radio → le radio, la foto → le foto, la città → le città), ` +
+      `-co/-go and -ca/-ga changes, and irregular plurals (l'uomo → gli uomini, il dito → le dita). ` +
+      `Output the bare word without any article.`
+    : `Give the four agreement forms of the adjective: masculine singular, feminine singular, ` +
+      `masculine plural, feminine plural. For -e adjectives both genders share the singular ` +
+      `(grande/grande) and plural (grandi/grandi). Watch invariable adjectives (blu, rosa, viola → unchanged).`;
+  const messages = [
+    { role: 'system', content: 'You are an expert Italian grammarian. Reply with valid JSON only.' },
+    {
+      role: 'user',
+      content:
+        `The Italian ${isNoun ? 'noun' : 'adjective'} is "${lemma}". ${rules} ` +
+        `Respond as JSON: ${shape}`,
+    },
+  ];
+  const keys = isNoun ? ['singular', 'plural'] : ['m_sg', 'f_sg', 'm_pl', 'f_pl'];
+  for (const model of ['openai/gpt-oss-120b', GROQ_MODEL, GROQ_MODEL]) {
+    try {
+      const out = await groqJson(messages, 1, model);
+      if (keys.every((k) => typeof out[k] === 'string' && (out[k] as string).trim())) {
+        return Object.fromEntries(keys.map((k) => [k, String(out[k]).trim().toLowerCase()]));
+      }
+    } catch (_) {
+      /* try next model */
+    }
+  }
+  throw new Error('could not generate inflected forms');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
     const bodyIn = await req.json();
+
+    // Action: regenerate inflected forms for a noun/adjective (no DB writes) —
+    // the "Re-check with AI" button on non-verb word cards. Fixes irregular /
+    // invariable words the rule-based inflection gets wrong (e.g. la radio).
+    if (bodyIn.action === 'forms') {
+      const lemma = String(bodyIn.lemma ?? '').trim().toLowerCase();
+      const pos = bodyIn.pos === 'adj' ? 'adj' : 'noun';
+      const gender = bodyIn.gender === 'f' ? 'f' : bodyIn.gender === 'm' ? 'm' : null;
+      if (!lemma) {
+        return new Response(JSON.stringify({ error: 'invalid lemma' }), {
+          status: 400,
+          headers: { ...cors, 'content-type': 'application/json' },
+        });
+      }
+      const forms = await inflectForms(lemma, pos, gender);
+      return new Response(JSON.stringify({ lemma, pos, forms }), {
+        headers: { ...cors, 'content-type': 'application/json' },
+      });
+    }
 
     // Action: regenerate conjugation tables for a verb (no DB writes) — used by
     // the "Re-check with AI" button on the word card.

@@ -383,6 +383,36 @@ export function useRecheckConjugations() {
   });
 }
 
+/**
+ * Re-derive a noun's/adjective's inflected forms via AI and store them on the
+ * word (overriding the rule-based inflection). Fixes irregular or invariable
+ * words like "la radio" (rule → "radii", correct → "radio").
+ */
+export function useRecheckForms() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (word: UserWord) => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.functions.invoke('enrich-word', {
+        body: { action: 'forms', lemma: word.lemma, pos: word.pos, gender: word.gender },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      const forms = (data?.forms ?? null) as Record<string, string> | null;
+      if (!forms || Object.keys(forms).length === 0) {
+        throw new Error('AI returned no usable forms.');
+      }
+      const { error: upErr } = await supabase
+        .from('user_words')
+        .update({ forms })
+        .eq('id', word.id);
+      if (upErr) throw new Error(upErr.message);
+      return word.id;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['user-words'] }),
+  });
+}
+
 export function useRemoveTense() {
   const qc = useQueryClient();
   return useMutation({

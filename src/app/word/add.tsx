@@ -28,6 +28,7 @@ import {
   TENSE_LABELS,
   TENSES,
   withArticle,
+  withArticlePlural,
   type Auxiliary,
   type Person,
   type Pos,
@@ -555,8 +556,8 @@ export default function AddWordScreen() {
                 <View className="mt-6">
                   <Text className="mb-2 text-sm font-semibold text-textLo">Forms</Text>
                   <View className="overflow-hidden rounded-2xl bg-surface">
-                    <PreviewRow label="Singular" value={f.singular} />
-                    <PreviewRow label="Plural" value={f.plural} border />
+                    <PreviewRow label="Singular" value={withArticle(f.singular, gender)} />
+                    <PreviewRow label="Plural" value={withArticlePlural(f.plural, gender)} border />
                   </View>
                 </View>
               );
