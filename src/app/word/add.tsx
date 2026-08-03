@@ -252,7 +252,9 @@ export default function AddWordScreen() {
                 if (selected && t !== selected.lemma) reset();
               }}
               placeholder={
-                searchLang === 'it' ? `a ${langInfo(targetLang).name} word…` : 'e.g. to have'
+                searchLang === 'it'
+                  ? `a ${langInfo(targetLang).name} word…`
+                  : `a ${langInfo(sourceLang).name} word…`
               }
               placeholderTextColor={colors.textLo}
               autoCapitalize="none"
@@ -273,7 +275,7 @@ export default function AddWordScreen() {
             )}
           </View>
 
-          {/* English mode with no dictionary match → let AI find the Italian */}
+          {/* Source-language mode, no dictionary match → let AI find the word */}
           {searchLang === 'en' &&
             !selected &&
             query.trim().length >= 2 &&
@@ -286,7 +288,7 @@ export default function AddWordScreen() {
                   </Text>
                 )}
                 <Pressable
-                  accessibilityLabel="Find the Italian with AI"
+                  accessibilityLabel={`Find the ${langInfo(targetLang).name} word with AI`}
                   disabled={enrich.isPending}
                   onPress={runEnrich}
                   className={`flex-row items-center justify-center gap-2 rounded-full bg-primary py-3.5 ${
@@ -296,14 +298,14 @@ export default function AddWordScreen() {
                     <>
                       <ActivityIndicator color={colors.onPrimary} />
                       <Text className="text-sm font-bold text-white">
-                        Finding the Italian for “{query.trim()}”…
+                        Finding the {langInfo(targetLang).name} for “{query.trim()}”…
                       </Text>
                     </>
                   ) : (
                     <>
                       <Ionicons name="sparkles" size={16} color={colors.onPrimary} />
                       <Text className="text-sm font-bold text-white">
-                        Find the Italian for “{query.trim()}” with AI
+                        Find the {langInfo(targetLang).name} for “{query.trim()}” with AI
                       </Text>
                     </>
                   )}

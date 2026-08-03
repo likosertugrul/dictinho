@@ -5,7 +5,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { POS_LABELS, POS_VALUES, withArticle, type Pos } from '@/lib/italian';
-import { hasGrammar } from '@/lib/lang';
+import { hasGrammar, langInfo, useTargetLang } from '@/lib/lang';
 import { useRecentWords, useToggleFlag } from '@/lib/words';
 import { colors } from '@/theme/tokens';
 
@@ -24,6 +24,7 @@ function StatChip({ icon, value }: { icon: string; value: number }) {
 export default function HomeScreen() {
   const recent = useRecentWords();
   const toggleFlag = useToggleFlag();
+  const targetLang = useTargetLang();
   const [posFilter, setPosFilter] = useState<Pos | 'all'>('all');
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [listQuery, setListQuery] = useState('');
@@ -149,7 +150,7 @@ export default function HomeScreen() {
               Your vocabulary starts here
             </Text>
             <Text className="mt-2 text-center text-sm text-textLo">
-              Tap the + button to add your first Italian word.
+              Tap the + button to add your first {langInfo(targetLang).name} word.
             </Text>
           </View>
         )}

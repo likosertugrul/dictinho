@@ -17,7 +17,7 @@ import { ArticleInfo } from '@/components/article-info';
 import { Speaker } from '@/components/speaker';
 import { WordCardModal } from '@/components/word-card-modal';
 import { matchesLemma, withArticle } from '@/lib/italian';
-import { hasGrammar } from '@/lib/lang';
+import { hasGrammar, langInfo, useTargetLang } from '@/lib/lang';
 import type { UserWord } from '@/lib/schemas';
 import { useDueCards, useReviewCard, type DueCard, type PracticeMode, type Rating } from '@/lib/srs';
 import { useToggleFlag } from '@/lib/words';
@@ -44,6 +44,8 @@ export default function SrsScreen() {
           : 'due';
   const pos = posParam && posParam !== 'all' ? posParam : undefined;
   const due = useDueCards(mode, pos, knownParam === '1');
+  // Prompts name the language actually being learned (EN→ES asks for Spanish)
+  const langName = langInfo(useTargetLang()).name;
   const review = useReviewCard();
   const toggleFlag = useToggleFlag();
 
@@ -82,7 +84,7 @@ export default function SrsScreen() {
 
   const check = () => {
     if (!current || !guess.trim()) return;
-    // Accept any Italian word that shares this English meaning (what → che/cosa/…)
+    // Accept any target word that shares this meaning (what → che/cosa/…)
     reveal(current.accept.some((lemma) => matchesLemma(guess, lemma)));
   };
 
@@ -162,7 +164,7 @@ export default function SrsScreen() {
           className="flex-1"
           contentContainerClassName="grow justify-center px-5 py-2"
           keyboardShouldPersistTaps="handled">
-          {/* Prompt: English meaning → guess the Italian word */}
+          {/* Prompt: meaning in the source language → guess the target word */}
           <View className="items-center rounded-card bg-surface px-6 py-10">
             {/* Star / add to drill list */}
             <Pressable
@@ -178,7 +180,7 @@ export default function SrsScreen() {
             </Pressable>
 
             <Text className="text-xs font-semibold uppercase tracking-widest text-textLo">
-              What’s the Italian for
+              What’s the {langName} for
             </Text>
             <Text className="mt-3 text-center text-2xl font-bold text-textHi">
               {word.translation}
@@ -194,7 +196,7 @@ export default function SrsScreen() {
                   value={guess}
                   onChangeText={setGuess}
                   onSubmitEditing={check}
-                  placeholder="type the Italian word…"
+                  placeholder={`type the ${langName} word…`}
                   placeholderTextColor={colors.textLo}
                   autoCapitalize="none"
                   autoCorrect={false}
