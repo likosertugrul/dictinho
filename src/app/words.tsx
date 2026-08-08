@@ -8,6 +8,7 @@ import { Container } from '@/components/container';
 import { WordList } from '@/components/word-list';
 import { useColumns } from '@/hooks/use-responsive';
 import { POS_LABELS, POS_VALUES, type Pos } from '@/lib/italian';
+import { closeModal } from '@/lib/nav';
 import type { UserWord } from '@/lib/schemas';
 import { useToughWords, useWrongWords } from '@/lib/srs';
 import { useRecentWords } from '@/lib/words';
@@ -104,7 +105,7 @@ export default function WordsScreen() {
           )}
           <Pressable
             accessibilityLabel="Close"
-            onPress={() => router.back()}
+            onPress={closeModal}
             className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
             <Ionicons name="close" size={20} color={colors.textHi} />
           </Pressable>

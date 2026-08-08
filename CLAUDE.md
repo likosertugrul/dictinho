@@ -90,6 +90,23 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   tabBarStyle'da width+minWidth 240 ZORUNLU). ≥768'de FAB yerine header'da
   "Add word" butonu, kelime listeleri 2–3 sütun, word card modal ortalanmış dialog.
   `useWindowDimensions` sayesinde pencere küçülünce reload'suz mobil tasarıma döner
+- ✅ Deyimler + alternatif anlamlar (2026-08-08): `enrich-word` artık boşluk içeren
+  girdiyi (veya `kind:'phrase'`) deyim olarak işliyor — gerçek anlam + `literal`
+  kelimesi kelimesine karşılık (Notes'a "Literally: …" olarak dolduruluyor),
+  pos='phrase'. Ayrıca `other_senses`: aynı lemmanın diğer kelime türleri
+  (bleach → fiil + isim) sözlüğe yazılıyor, add ekranında "also works as" listesi
+  olarak çıkıyor; tikleyince ikinci kelime olarak birlikte kaydediliyor
+  ("Save 2 words"). Alternatif fiillere çekim üretilmiyor (yavaşlatır);
+  `ensureConjugations` sonradan tamamlıyor. Sözlükten gelen kelimelerde alternatif
+  anlamlar autocomplete sonuçlarından hesaplanıyor (ekstra sorgu yok)
+- ✅ Çok dillilik düzeltmeleri: `languages` tablosunda sadece en/it/es vardı →
+  tr/fr/de/pt eklendi (0013); FK reddi yüzünden Türkçe konuşan kullanıcıya HİÇ
+  çeviri yazılamıyordu (insert hatası sessizce yutuluyordu — artık throw ediyor).
+  `search_lexicon`/`search_lexicon_en` artık `src` parametresi alıyor (0012),
+  yoksa Türk kullanıcı İspanyolca çeviri görüyordu. `auxiliary` (essere/avere)
+  yalnızca İtalyanca'da yazılıyor; İngilizce fiillerdeki hatalı "avere" temizlendi (0014)
+- ✅ `closeModal()` (`src/lib/nav.ts`): URL ile doğrudan açılan modal'da
+  `router.back()` hiçbir şey yapmıyordu (kaydettikten sonra ekranda kalıyordu)
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, tema tag'leri, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için

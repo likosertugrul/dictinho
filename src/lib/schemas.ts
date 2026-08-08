@@ -20,6 +20,17 @@ export const lexiconSuggestionSchema = z.object({
 });
 export type LexiconSuggestion = z.infer<typeof lexiconSuggestionSchema>;
 
+/**
+ * `enrich-word` response: the entry the user asked for, plus the same lemma in
+ * other word classes ("bleach" the verb → "bleach" the noun) and, for idioms,
+ * the word-for-word gloss behind the idiomatic meaning.
+ */
+export const enrichResultSchema = lexiconSuggestionSchema.extend({
+  literal: z.string().nullable().default(null),
+  alternatives: z.array(lexiconSuggestionSchema).default([]),
+});
+export type EnrichResult = z.infer<typeof enrichResultSchema>;
+
 /** `enrich-word` Edge Function response (Faz 2). */
 export const enrichmentSchema = z.object({
   lemma: z.string(),

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -21,6 +21,7 @@ import { MAX_W } from '@/hooks/use-responsive';
 import { conjugateRegular } from '@/lib/conjugator';
 import { adjectiveForms, nounForms } from '@/lib/inflect';
 import { hasGrammar, langInfo, useSourceLang, useTargetLang } from '@/lib/lang';
+import { closeModal } from '@/lib/nav';
 import {
   AUXILIARIES,
   matchesLemma,
@@ -91,6 +92,9 @@ export default function AddWordScreen() {
   const [selected, setSelected] = useState<LexiconSuggestion | null>(null);
   const [translation, setTranslation] = useState('');
   const [notes, setNotes] = useState('');
+  // Other word classes of the picked lemma, and which of them to save too
+  const [aiAlternatives, setAiAlternatives] = useState<LexiconSuggestion[]>([]);
+  const [extraSenses, setExtraSenses] = useState<string[]>([]);
   // Only Presente is pre-selected; the user can add more tenses per verb
   const [tenses, setTenses] = useState<Tense[]>(['presente']);
 
@@ -99,17 +103,29 @@ export default function AddWordScreen() {
 
   // Manual attributes — used when the word isn't in the base lexicon
   const [manualPos, setManualPos] = useState<Pos>('noun');
+  const [posTouched, setPosTouched] = useState(false);
   const [manualGender, setManualGender] = useState<'m' | 'f' | null>(null);
   const [manualAux, setManualAux] = useState<Auxiliary>('avere');
 
-  const effectivePos: Pos = selected?.pos ?? manualPos;
+  // Anything with a space is an idiom / set phrase ("in bocca al lupo"), which
+  // the AI look-up and the word-class default both key off.
+  const isPhraseInput = /\s/.test(query.trim());
+  // Until the user picks a class themselves, follow what they typed.
+  const effectiveManualPos: Pos = posTouched ? manualPos : isPhraseInput ? 'phrase' : 'noun';
+
+  const pickPos = (p: Pos) => {
+    setManualPos(p);
+    setPosTouched(true);
+  };
+
+  const effectivePos: Pos = selected?.pos ?? effectiveManualPos;
   // Verb tense selection / conjugation UI only for languages with grammar (Italian)
   const isVerb = effectivePos === 'verb' && grammar;
 
   const toggleTense = (t: Tense) =>
     setTenses((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
-  const search = useLexiconSearch(query, searchLang, targetLang);
+  const search = useLexiconSearch(query, searchLang, targetLang, sourceLang);
   const addWord = useAddWord();
   const enrich = useEnrichWord();
   const myWords = useRecentWords();
@@ -148,18 +164,28 @@ export default function AddWordScreen() {
     setSelected(s);
     setQuery(s.lemma);
     setTranslation(s.translation ?? '');
+    setExtraSenses([]);
   };
 
   const runEnrich = () => {
     const term = query.trim();
     if (!term) return;
     enrich.mutate(
-      { term, lang: searchLang, target: targetLang, source: sourceLang },
+      {
+        term,
+        lang: searchLang,
+        target: targetLang,
+        source: sourceLang,
+        kind: isPhraseInput ? 'phrase' : 'word',
+      },
       {
         onSuccess: (s) => {
           if (searchLang === 'en') setSearchLang('it'); // switch to show the target word
           pick(s); // treat the AI-added entry exactly like a dictionary match
           if (s.pos === 'verb') setTenses(['presente']);
+          setAiAlternatives(s.alternatives);
+          // Idioms: keep the word-for-word reading, the meaning alone hides it
+          if (s.literal && !notes.trim()) setNotes(`Literally: ${s.literal}`);
         },
       },
     );
@@ -168,13 +194,35 @@ export default function AddWordScreen() {
   const reset = () => {
     setSelected(null);
     setTranslation('');
+    setAiAlternatives([]);
+    setExtraSenses([]);
   };
+
+  /**
+   * The same lemma in other word classes — "bleach" the verb also being a noun.
+   * They come from the AI look-up and from autocomplete (which, once a word is
+   * picked, is searching that exact lemma anyway).
+   */
+  const otherSenses = useMemo(() => {
+    if (!selected) return [];
+    const seen = new Set<string>([selected.pos]);
+    const out: LexiconSuggestion[] = [];
+    for (const s of [...aiAlternatives, ...suggestions]) {
+      if (seen.has(s.pos) || !matchesLemma(s.lemma, selected.lemma)) continue;
+      seen.add(s.pos);
+      out.push(s);
+    }
+    return out;
+  }, [selected, aiAlternatives, suggestions]);
+
+  const toggleExtraSense = (id: string) =>
+    setExtraSenses((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const canSave = query.trim().length > 0 && translation.trim().length > 0 && !addWord.isPending;
 
-  const save = () => {
-    addWord.mutate(
-      {
+  const save = async () => {
+    try {
+      await addWord.mutateAsync({
         lemma: selected?.lemma ?? query.trim(),
         translation: translation.trim(),
         pos: effectivePos,
@@ -185,9 +233,26 @@ export default function AddWordScreen() {
         notes: notes.trim() || null,
         status,
         tenses: isVerb ? tenses : [],
-      },
-      { onSuccess: () => router.back() },
-    );
+      });
+      // Ticked extra senses are saved as their own words (same lemma, own class)
+      for (const s of otherSenses.filter((o) => extraSenses.includes(o.id))) {
+        await addWord.mutateAsync({
+          lemma: s.lemma,
+          translation: s.translation ?? '',
+          pos: s.pos,
+          gender: s.gender,
+          auxiliary: s.auxiliary,
+          cefr: s.cefr,
+          lexicon_ref: s.id,
+          notes: null,
+          status,
+          tenses: s.pos === 'verb' && grammar ? tenses : [],
+        });
+      }
+      closeModal();
+    } catch {
+      /* the error is rendered from addWord.error below */
+    }
   };
 
   return (
@@ -202,7 +267,7 @@ export default function AddWordScreen() {
               <Text className="text-2xl font-bold text-textHi">Add word</Text>
               <Pressable
                 accessibilityLabel="Close"
-                onPress={() => router.back()}
+                onPress={closeModal}
                 className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
                 <Ionicons name="close" size={20} color={colors.textHi} />
               </Pressable>
@@ -295,7 +360,9 @@ export default function AddWordScreen() {
                   </Text>
                 )}
                 <Pressable
-                  accessibilityLabel={`Find the ${langInfo(targetLang).name} word with AI`}
+                  accessibilityLabel={`Find the ${langInfo(targetLang).name} ${
+                    isPhraseInput ? 'expression' : 'word'
+                  } with AI`}
                   disabled={enrich.isPending}
                   onPress={runEnrich}
                   className={`flex-row items-center justify-center gap-2 rounded-full bg-primary py-3.5 ${
@@ -312,11 +379,18 @@ export default function AddWordScreen() {
                     <>
                       <Ionicons name="sparkles" size={16} color={colors.onPrimary} />
                       <Text className="text-sm font-bold text-white">
-                        Find the {langInfo(targetLang).name} for “{query.trim()}” with AI
+                        {isPhraseInput
+                          ? `Find the ${langInfo(targetLang).name} expression for “${query.trim()}”`
+                          : `Find the ${langInfo(targetLang).name} for “${query.trim()}” with AI`}
                       </Text>
                     </>
                   )}
                 </Pressable>
+                {isPhraseInput && !enrich.isPending && (
+                  <Text className="mt-2 px-1 text-xs text-textLo">
+                    Idioms get their real meaning, not a word-for-word translation.
+                  </Text>
+                )}
                 {enrich.isError && (
                   <Text className="mt-2 px-1 text-xs text-primary">{enrich.error.message}</Text>
                 )}
@@ -380,10 +454,71 @@ export default function AddWordScreen() {
             </View>
           )}
 
+          {/* Other word classes of the same lemma — "bleach" is also a noun.
+              Ticked ones are saved as their own words alongside this one. */}
+          {otherSenses.length > 0 && (
+            <View className="mt-4">
+              <Text className="mb-2 text-sm font-semibold text-textLo">
+                “{selected!.lemma}” also works as: {otherSenses.map((s) => s.pos).join(', ')}
+              </Text>
+              <View className="overflow-hidden rounded-2xl bg-surface">
+                {otherSenses.map((s, i) => {
+                  const checked = extraSenses.includes(s.id);
+                  const owned = ownedStatus(s.lemma, s.pos);
+                  return (
+                    <Pressable
+                      key={s.id}
+                      accessibilityLabel={`${checked ? 'Do not add' : 'Also add'} the ${s.pos} sense of ${s.lemma}`}
+                      onPress={() => toggleExtraSense(s.id)}
+                      className={`flex-row items-center gap-3 px-4 py-3 ${
+                        i > 0 ? 'border-t border-border' : ''
+                      }`}>
+                      <View
+                        className={`h-5 w-5 items-center justify-center rounded-md border ${
+                          checked ? 'border-primary bg-primary' : 'border-border'
+                        }`}>
+                        {checked && <Ionicons name="checkmark" size={14} color={colors.onPrimary} />}
+                      </View>
+                      <View className="flex-1">
+                        <View className="flex-row items-center gap-1.5">
+                          <Badge label={s.pos} />
+                          {s.gender ? <Badge label={s.gender} /> : null}
+                          {s.auxiliary ? <Badge label={s.auxiliary} tone="primary" /> : null}
+                        </View>
+                        <Text className="mt-1 text-sm text-textHi">{s.translation}</Text>
+                        {owned && (
+                          <Text
+                            className="mt-0.5 text-[11px] font-semibold"
+                            style={{ color: colors.pastel.mint }}>
+                            already in your list
+                          </Text>
+                        )}
+                      </View>
+                      {/* Switch the form to this sense instead of adding both */}
+                      <Pressable
+                        accessibilityLabel={`Edit the ${s.pos} sense instead`}
+                        hitSlop={8}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          pick(s);
+                        }}
+                        className="rounded-full bg-surfaceAlt px-3 py-1.5">
+                        <Text className="text-xs font-bold text-textHi">Edit this</Text>
+                      </Pressable>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text className="mt-2 px-1 text-xs text-textLo">
+                Tick a sense to save it as a second word.
+              </Text>
+            </View>
+          )}
+
           {/* Already-in-list note for the picked / typed word */}
           {(() => {
             const lemma = selected?.lemma ?? query.trim();
-            const p = selected?.pos ?? manualPos;
+            const p = selected?.pos ?? effectiveManualPos;
             const owned = lemma.length >= 2 ? ownedStatus(lemma, p) : null;
             if (!owned) return null;
             return (
@@ -404,12 +539,12 @@ export default function AddWordScreen() {
                 <>
                   {suggestions.length > 0 && (
                     <Text className="mb-2 mt-4 px-1 text-xs text-textLo">
-                      Not the word you meant? Add it directly:
+                      Not the {isPhraseInput ? 'expression' : 'word'} you meant? Add it directly:
                     </Text>
                   )}
                   {/* AI look-up: fills type/meaning/auxiliary + correct conjugations */}
                   <Pressable
-                    accessibilityLabel="Add with AI"
+                    accessibilityLabel={isPhraseInput ? 'Add expression with AI' : 'Add with AI'}
                     disabled={enrich.isPending}
                     onPress={runEnrich}
                     className={`flex-row items-center justify-center gap-2 rounded-full bg-primary py-3.5 ${
@@ -424,7 +559,9 @@ export default function AddWordScreen() {
                       <>
                         <Ionicons name="sparkles" size={16} color={colors.onPrimary} />
                         <Text className="text-sm font-bold text-white">
-                          Add “{query.trim()}” with AI
+                          {isPhraseInput
+                            ? `Add the expression “${query.trim()}” with AI`
+                            : `Add “${query.trim()}” with AI`}
                         </Text>
                       </>
                     )}
@@ -443,17 +580,17 @@ export default function AddWordScreen() {
                 {POS_VALUES.map((p) => (
                   <Pressable
                     key={p}
-                    onPress={() => setManualPos(p)}
-                    className={`rounded-full px-3.5 py-1.5 ${manualPos === p ? 'bg-primary' : 'bg-surfaceAlt'}`}>
+                    onPress={() => pickPos(p)}
+                    className={`rounded-full px-3.5 py-1.5 ${effectiveManualPos === p ? 'bg-primary' : 'bg-surfaceAlt'}`}>
                     <Text
-                      className={`text-sm font-semibold ${manualPos === p ? 'text-white' : 'text-textLo'}`}>
+                      className={`text-sm font-semibold ${effectiveManualPos === p ? 'text-white' : 'text-textLo'}`}>
                       {p}
                     </Text>
                   </Pressable>
                 ))}
               </View>
 
-              {manualPos === 'noun' && (
+              {effectiveManualPos === 'noun' && (
                 <>
                   <Text className="mb-2 mt-4 text-sm font-semibold text-textLo">Gender</Text>
                   <View className="flex-row gap-2">
@@ -472,7 +609,7 @@ export default function AddWordScreen() {
                 </>
               )}
 
-              {manualPos === 'verb' && (
+              {effectiveManualPos === 'verb' && (
                 <>
                   <Text className="mb-2 mt-4 text-sm font-semibold text-textLo">Auxiliary</Text>
                   <View className="flex-row gap-2">
@@ -617,7 +754,9 @@ export default function AddWordScreen() {
           </View>
 
           {/* English meaning */}
-          <Text className="mb-2 mt-6 text-sm font-semibold text-textLo">English meaning</Text>
+          <Text className="mb-2 mt-6 text-sm font-semibold text-textLo">
+            {langInfo(sourceLang).name} meaning
+          </Text>
           <View className="rounded-2xl bg-surface px-4">
             <TextInput
               value={translation}
@@ -660,7 +799,7 @@ export default function AddWordScreen() {
                 <ActivityIndicator color={colors.onPrimary} />
               ) : (
                 <Text className={`text-base font-bold ${canSave ? 'text-white' : 'text-textLo'}`}>
-                  Save word
+                  {extraSenses.length > 0 ? `Save ${extraSenses.length + 1} words` : 'Save word'}
                 </Text>
               )}
             </Pressable>
