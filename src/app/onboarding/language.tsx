@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Container } from '@/components/container';
+import { MAX_W, useResponsive } from '@/hooks/use-responsive';
 import { LEARNABLE, setLanguages, SOURCE_LANGS, type LangCode } from '@/lib/lang';
 import { colors } from '@/theme/tokens';
 
@@ -63,6 +65,7 @@ export default function LanguageOnboarding() {
   const [step, setStep] = useState<1 | 2>(1);
   const [target, setTarget] = useState<LangCode | null>(null);
   const [source, setSource] = useState<string>('en');
+  const { isTablet } = useResponsive();
 
   const finish = () => {
     if (!target) return;
@@ -71,25 +74,35 @@ export default function LanguageOnboarding() {
     else router.replace('/');
   };
 
+  // Wide screens show the flags two-up so the list doesn't run off the fold.
+  const options = (list: typeof LEARNABLE | typeof SOURCE_LANGS, pick: (code: string) => void, active: string | null) =>
+    isTablet ? (
+      <View className="-mx-1.5 mt-10 flex-row flex-wrap">
+        {list.map((l) => (
+          <View key={l.code} style={{ width: '50%' }} className="px-1.5 pb-3">
+            <OptionRow {...l} active={active === l.code} onPress={() => pick(l.code)} />
+          </View>
+        ))}
+      </View>
+    ) : (
+      <View className="mt-10 gap-3">
+        {list.map((l) => (
+          <OptionRow key={l.code} {...l} active={active === l.code} onPress={() => pick(l.code)} />
+        ))}
+      </View>
+    );
+
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <ScrollView contentContainerClassName="flex-grow px-6 pt-8" showsVerticalScrollIndicator={false}>
+        <Container max={MAX_W.content}>
         {step === 1 ? (
           <>
             <Text className="text-3xl font-bold text-textHi">
               What language{'\n'}do you want to learn?
             </Text>
             <Text className="mt-2 text-sm text-textLo">You can change this anytime in settings.</Text>
-            <View className="mt-10 gap-3">
-              {LEARNABLE.map((l) => (
-                <OptionRow
-                  key={l.code}
-                  {...l}
-                  active={target === l.code}
-                  onPress={() => setTarget(l.code)}
-                />
-              ))}
-            </View>
+            {options(LEARNABLE, (code) => setTarget(code as LangCode), target)}
           </>
         ) : (
           <>
@@ -99,21 +112,15 @@ export default function LanguageOnboarding() {
             <Text className="mt-2 text-sm text-textLo">
               Translations and meanings will be shown in this language.
             </Text>
-            <View className="mt-10 gap-3">
-              {SOURCE_LANGS.map((l) => (
-                <OptionRow
-                  key={l.code}
-                  {...l}
-                  active={source === l.code}
-                  onPress={() => setSource(l.code)}
-                />
-              ))}
-            </View>
+            {options(SOURCE_LANGS, setSource, source)}
           </>
         )}
+        </Container>
       </ScrollView>
 
-      <View className="flex-row gap-2 px-6 pb-4">
+      <View className="px-6 pb-4">
+        <Container max={MAX_W.content}>
+        <View className="flex-row gap-2">
         {step === 2 && (
           <Pressable
             accessibilityLabel="Back"
@@ -134,6 +141,8 @@ export default function LanguageOnboarding() {
             {step === 1 ? 'Next' : 'Continue'}
           </Text>
         </Pressable>
+        </View>
+        </Container>
       </View>
     </SafeAreaView>
   );

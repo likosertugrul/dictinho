@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Container } from '@/components/container';
+import { MAX_W, useResponsive } from '@/hooks/use-responsive';
 import { POS_LABELS, POS_VALUES, type Pos } from '@/lib/italian';
 import { hasGrammar } from '@/lib/lang';
 import { useToughWords, useWrongWords } from '@/lib/srs';
@@ -16,6 +18,7 @@ export default function PracticeScreen() {
   const recent = useRecentWords();
   const wrong = useWrongWords();
   const tough = useToughWords();
+  const { isTablet } = useResponsive();
   const [focus, setFocus] = useState<Focus>('all');
   const [includeKnown, setIncludeKnown] = useState(false);
 
@@ -30,6 +33,38 @@ export default function PracticeScreen() {
 
   const availablePos = POS_VALUES.filter((p) => words.some((w) => w.pos === p));
 
+  const lists = (
+    [
+      {
+        key: 'tough',
+        icon: 'flame',
+        iconColor: colors.primary,
+        title: 'Tough words',
+        subtitle: 'Answered wrong several times',
+        count: toughCount,
+        onPress: () => router.push('/words?list=tough'),
+      },
+      {
+        key: 'mistakes',
+        icon: 'alert-circle',
+        iconColor: colors.primary,
+        title: 'Mistakes',
+        subtitle: 'Last answer was wrong',
+        count: mistakesCount,
+        onPress: () => router.push('/words?list=mistakes'),
+      },
+      {
+        key: 'starred',
+        icon: 'star',
+        iconColor: colors.pastel.yellow,
+        title: 'Starred',
+        subtitle: 'Words you flagged',
+        count: starredCount,
+        onPress: () => router.push('/words?list=starred'),
+      },
+    ] as const
+  ).filter((l) => l.count > 0);
+
   const practiceDue = () => {
     const params: Record<string, string> = { mode: 'due' };
     if (focus !== 'all') params.pos = focus;
@@ -40,13 +75,16 @@ export default function PracticeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="px-5 py-3">
-        <Text className="text-2xl font-bold text-textHi">Practice</Text>
+        <Container max={MAX_W.content}>
+          <Text className="text-2xl font-bold text-textHi">Practice</Text>
+        </Container>
       </View>
 
       <ScrollView
         className="flex-1"
         contentContainerClassName="px-5 pb-28 pt-2"
         showsVerticalScrollIndicator={false}>
+        <Container max={MAX_W.content}>
         {words.length === 0 ? (
           <View className="mt-24 items-center px-8">
             <View className="h-16 w-16 items-center justify-center rounded-full bg-surface">
@@ -104,11 +142,15 @@ export default function PracticeScreen() {
               </Pressable>
             )}
 
+            {/* The two drills sit side by side once there's room for them */}
+            <View className={isTablet ? 'mb-4 flex-row gap-3' : ''}>
             {/* Flashcards (due) */}
             <Pressable
               accessibilityLabel="Practice flashcards"
               onPress={practiceDue}
-              className="mb-4 flex-row items-center gap-3 rounded-card bg-primary p-4">
+              className={`flex-row items-center gap-3 rounded-card bg-primary p-4 ${
+                isTablet ? 'flex-1' : 'mb-4'
+              }`}>
               <View className="h-11 w-11 items-center justify-center rounded-full bg-white/20">
                 <Ionicons name="albums" size={22} color={colors.onPrimary} />
               </View>
@@ -127,7 +169,9 @@ export default function PracticeScreen() {
               <Pressable
                 accessibilityLabel="Practice articles"
                 onPress={() => router.push('/srs/articles')}
-                className="mb-4 flex-row items-center gap-3 rounded-card bg-surface p-4">
+                className={`flex-row items-center gap-3 rounded-card bg-surface p-4 ${
+                  isTablet ? 'flex-1' : 'mb-4'
+                }`}>
                 <View className="h-11 w-11 items-center justify-center rounded-full bg-surfaceAlt">
                   <Ionicons name="pricetags" size={20} color={colors.primary} />
                 </View>
@@ -140,52 +184,37 @@ export default function PracticeScreen() {
                 <Ionicons name="chevron-forward" size={18} color={colors.textLo} />
               </Pressable>
             )}
+            </View>
 
             <Text className="mb-2 text-sm font-semibold text-textLo">Lists</Text>
 
-            {/* Tough words (repeatedly wrong) */}
-            {toughCount > 0 && (
-              <ListEntry
-                icon="flame"
-                iconColor="#F5654E"
-                title="Tough words"
-                subtitle="Answered wrong several times"
-                count={toughCount}
-                onPress={() => router.push('/words?list=tough')}
-              />
-            )}
+            {/* Tough / mistakes / starred — two-up on wide screens */}
+            <View className={isTablet ? '-mx-1 flex-row flex-wrap' : ''}>
+              {lists.map((l) => (
+                <View
+                  key={l.key}
+                  style={isTablet ? { width: '50%' } : undefined}
+                  className={isTablet ? 'px-1' : ''}>
+                  <ListEntry
+                    icon={l.icon}
+                    iconColor={l.iconColor}
+                    title={l.title}
+                    subtitle={l.subtitle}
+                    count={l.count}
+                    onPress={l.onPress}
+                  />
+                </View>
+              ))}
+            </View>
 
-            {/* Mistakes (last answer wrong) */}
-            {mistakesCount > 0 && (
-              <ListEntry
-                icon="alert-circle"
-                iconColor={colors.primary}
-                title="Mistakes"
-                subtitle="Last answer was wrong"
-                count={mistakesCount}
-                onPress={() => router.push('/words?list=mistakes')}
-              />
-            )}
-
-            {/* Starred */}
-            {starredCount > 0 && (
-              <ListEntry
-                icon="star"
-                iconColor={colors.pastel.yellow}
-                title="Starred"
-                subtitle="Words you flagged"
-                count={starredCount}
-                onPress={() => router.push('/words?list=starred')}
-              />
-            )}
-
-            {toughCount === 0 && mistakesCount === 0 && starredCount === 0 && (
+            {lists.length === 0 && (
               <Text className="mt-1 text-sm text-textLo">
                 Star words or make mistakes in practice to build lists here.
               </Text>
             )}
           </>
         )}
+        </Container>
       </ScrollView>
     </SafeAreaView>
   );

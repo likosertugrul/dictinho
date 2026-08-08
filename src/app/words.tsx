@@ -4,11 +4,13 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { POS_LABELS, POS_VALUES, withArticle, type Pos } from '@/lib/italian';
-import { hasGrammar } from '@/lib/lang';
+import { Container } from '@/components/container';
+import { WordList } from '@/components/word-list';
+import { useColumns } from '@/hooks/use-responsive';
+import { POS_LABELS, POS_VALUES, type Pos } from '@/lib/italian';
 import type { UserWord } from '@/lib/schemas';
 import { useToughWords, useWrongWords } from '@/lib/srs';
-import { useRecentWords, useToggleFlag } from '@/lib/words';
+import { useRecentWords } from '@/lib/words';
 import { colors } from '@/theme/tokens';
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
@@ -32,7 +34,7 @@ export default function WordsScreen() {
   const recent = useRecentWords();
   const wrong = useWrongWords();
   const tough = useToughWords();
-  const toggleFlag = useToggleFlag();
+  const columns = useColumns();
 
   const [q, setQ] = useState('');
   const [posFilter, setPosFilter] = useState<Pos | 'all'>('all');
@@ -84,6 +86,7 @@ export default function WordsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+      <Container>
       {/* Header */}
       <View className="flex-row items-center justify-between px-5 py-3">
         <Text className="text-2xl font-bold text-textHi">
@@ -182,45 +185,18 @@ export default function WordsScreen() {
           ))}
         </ScrollView>
       )}
+      </Container>
 
       <ScrollView className="flex-1" contentContainerClassName="px-5 pb-8">
-        <View className="overflow-hidden rounded-card bg-surface">
-          {list.map((w, i) => (
-            <Pressable
-              key={w.id}
-              onPress={() => router.push(`/word/${w.id}`)}
-              className={`flex-row items-center justify-between px-4 py-3 ${i > 0 ? 'border-t border-border' : ''}`}>
-              <View className="flex-1 pr-3">
-                <Text className="text-base font-semibold text-textHi">
-                  {hasGrammar(w.target_language) && w.pos === 'noun'
-                    ? withArticle(w.lemma, w.gender)
-                    : w.lemma}
-                </Text>
-                <Text className="mt-0.5 text-xs text-textLo">{w.translation}</Text>
-              </View>
-              <View className="flex-row items-center gap-1.5">
-                <Pressable
-                  accessibilityLabel={w.flagged ? 'Unflag' : 'Flag'}
-                  hitSlop={8}
-                  onPress={(e) => {
-                    e.stopPropagation?.();
-                    toggleFlag.mutate({ id: w.id, flagged: !w.flagged });
-                  }}
-                  className="h-7 w-7 items-center justify-center">
-                  <Ionicons
-                    name={w.flagged ? 'star' : 'star-outline'}
-                    size={16}
-                    color={w.flagged ? colors.pastel.yellow : colors.textLo}
-                  />
-                </Pressable>
-                <Ionicons name="chevron-forward" size={16} color={colors.textLo} />
-              </View>
-            </Pressable>
-          ))}
-          {list.length === 0 && (
-            <Text className="px-4 py-6 text-center text-sm text-textLo">No words.</Text>
+        <Container>
+          {list.length > 0 ? (
+            <WordList words={list} columns={columns} />
+          ) : (
+            <View className="rounded-card bg-surface">
+              <Text className="px-4 py-6 text-center text-sm text-textLo">No words.</Text>
+            </View>
           )}
-        </View>
+        </Container>
       </ScrollView>
     </SafeAreaView>
   );

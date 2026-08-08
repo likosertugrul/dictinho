@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { POS_LABELS, POS_VALUES, withArticle, type Pos } from '@/lib/italian';
-import { hasGrammar, langInfo, useTargetLang } from '@/lib/lang';
-import { useRecentWords, useToggleFlag } from '@/lib/words';
+import { Container } from '@/components/container';
+import { WordList } from '@/components/word-list';
+import { useColumns, useResponsive } from '@/hooks/use-responsive';
+import { POS_LABELS, POS_VALUES, type Pos } from '@/lib/italian';
+import { langInfo, useTargetLang } from '@/lib/lang';
+import { useRecentWords } from '@/lib/words';
 import { colors } from '@/theme/tokens';
-
-const displayLemma = (w: { pos: string; lemma: string; gender: 'm' | 'f' | null; target_language: string }) =>
-  hasGrammar(w.target_language) && w.pos === 'noun' ? withArticle(w.lemma, w.gender) : w.lemma;
 
 function StatChip({ icon, value }: { icon: string; value: number }) {
   return (
@@ -23,8 +23,9 @@ function StatChip({ icon, value }: { icon: string; value: number }) {
 
 export default function HomeScreen() {
   const recent = useRecentWords();
-  const toggleFlag = useToggleFlag();
   const targetLang = useTargetLang();
+  const { isTablet } = useResponsive();
+  const columns = useColumns();
   const [posFilter, setPosFilter] = useState<Pos | 'all'>('all');
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [listQuery, setListQuery] = useState('');
@@ -77,69 +78,46 @@ export default function HomeScreen() {
   // Two separate lists
   const learningWords = filteredWords.filter((w) => w.status === 'learning');
   const knownWords = filteredWords.filter((w) => w.status === 'known');
-
-  const renderWordList = (list: typeof filteredWords) => (
-    <View className="overflow-hidden rounded-card bg-surface">
-      {list.map((w, i) => (
-        <Pressable
-          key={w.id}
-          onPress={() => router.push(`/word/${w.id}`)}
-          className={`flex-row items-center justify-between px-4 py-3 ${
-            i > 0 ? 'border-t border-border' : ''
-          }`}>
-          <View className="flex-1 pr-3">
-            <Text className="text-base font-semibold text-textHi">
-              {displayLemma(w)}
-            </Text>
-            <Text className="mt-0.5 text-xs text-textLo">{w.translation}</Text>
-          </View>
-          <View className="flex-row items-center gap-1.5">
-            <Pressable
-              accessibilityLabel={w.flagged ? 'Unflag word' : 'Flag for review'}
-              hitSlop={8}
-              onPress={(e) => {
-                e.stopPropagation?.();
-                toggleFlag.mutate({ id: w.id, flagged: !w.flagged });
-              }}
-              className="h-7 w-7 items-center justify-center">
-              <Ionicons
-                name={w.flagged ? 'star' : 'star-outline'}
-                size={16}
-                color={w.flagged ? colors.pastel.yellow : colors.textLo}
-              />
-            </Pressable>
-            {w.auxiliary ? (
-              <View className="rounded-full bg-primary px-2.5 py-0.5">
-                <Text className="text-xs font-semibold text-white">{w.auxiliary}</Text>
-              </View>
-            ) : null}
-            <Ionicons name="chevron-forward" size={16} color={colors.textLo} />
-          </View>
-        </Pressable>
-      ))}
-    </View>
-  );
+  // A grid fits more per screen, so preview more before "See all" (12 divides
+  // evenly by both 2 and 3 columns).
+  const preview = columns > 1 ? 12 : 10;
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center gap-3 px-5 py-3">
-        <View className="h-11 w-11 items-center justify-center rounded-full bg-primary">
-          <Ionicons name="person" size={20} color={colors.onPrimary} />
-        </View>
-        <View className="flex-1">
-          <Text className="text-base font-bold text-textHi">Welcome</Text>
-          <View className="mt-1 flex-row gap-2">
-            <StatChip icon="🔥" value={0} />
-            <StatChip icon="💎" value={0} />
+      <View className="px-5 py-3">
+        <Container>
+          <View className="flex-row items-center gap-3">
+            <View className="h-11 w-11 items-center justify-center rounded-full bg-primary">
+              <Ionicons name="person" size={20} color={colors.onPrimary} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-base font-bold text-textHi">Welcome</Text>
+              <View className="mt-1 flex-row gap-2">
+                <StatChip icon="🔥" value={0} />
+                <StatChip icon="💎" value={0} />
+              </View>
+            </View>
+            {/* Wide screens: a real button in the header — a corner FAB is a long
+                way from the content on a desktop monitor. */}
+            {isTablet && (
+              <Pressable
+                accessibilityLabel="Add word"
+                onPress={() => router.push('/word/add')}
+                className="flex-row items-center gap-1.5 rounded-full bg-primary px-4 py-2.5">
+                <Ionicons name="add" size={18} color={colors.onPrimary} />
+                <Text className="text-sm font-bold text-white">Add word</Text>
+              </Pressable>
+            )}
           </View>
-        </View>
+        </Container>
       </View>
 
       <ScrollView
         className="flex-1"
         contentContainerClassName="px-5 pb-28 pt-2"
         showsVerticalScrollIndicator={false}>
+       <Container>
         {/* Empty state */}
         {!recent.isLoading && words.length === 0 && (
           <View className="mt-24 items-center px-8">
@@ -282,8 +260,8 @@ export default function HomeScreen() {
                     To learn ({learningWords.length})
                   </Text>
                 </View>
-                {renderWordList(learningWords.slice(0, 10))}
-                {learningWords.length > 10 && (
+                <WordList words={learningWords.slice(0, preview)} columns={columns} />
+                {learningWords.length > preview && (
                   <Pressable
                     accessibilityLabel="See all to-learn words"
                     onPress={() => router.push('/words?status=learning')}
@@ -305,8 +283,8 @@ export default function HomeScreen() {
                     Known ({knownWords.length})
                   </Text>
                 </View>
-                {renderWordList(knownWords.slice(0, 10))}
-                {knownWords.length > 10 && (
+                <WordList words={knownWords.slice(0, preview)} columns={columns} />
+                {knownWords.length > preview && (
                   <Pressable
                     accessibilityLabel="See all known words"
                     onPress={() => router.push('/words?status=known')}
@@ -327,15 +305,18 @@ export default function HomeScreen() {
             )}
           </View>
         )}
+        </Container>
       </ScrollView>
 
-      {/* FAB → add word modal */}
-      <Pressable
-        accessibilityLabel="Add word"
-        onPress={() => router.push('/word/add')}
-        className="absolute bottom-6 right-5 h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg">
-        <Ionicons name="add" size={28} color={colors.onPrimary} />
-      </Pressable>
+      {/* FAB → add word modal (phones only; wide screens use the header button) */}
+      {!isTablet && (
+        <Pressable
+          accessibilityLabel="Add word"
+          onPress={() => router.push('/word/add')}
+          className="absolute bottom-6 right-5 h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg">
+          <Ionicons name="add" size={28} color={colors.onPrimary} />
+        </Pressable>
+      )}
     </SafeAreaView>
   );
 }

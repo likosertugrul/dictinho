@@ -14,8 +14,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ArticleInfo } from '@/components/article-info';
+import { Container } from '@/components/container';
 import { Speaker } from '@/components/speaker';
 import { WordCardModal } from '@/components/word-card-modal';
+import { MAX_W } from '@/hooks/use-responsive';
 import { matchesLemma, withArticle } from '@/lib/italian';
 import { hasGrammar, langInfo, useTargetLang } from '@/lib/lang';
 import type { UserWord } from '@/lib/schemas';
@@ -164,6 +166,7 @@ export default function SrsScreen() {
           className="flex-1"
           contentContainerClassName="grow justify-center px-5 py-2"
           keyboardShouldPersistTaps="handled">
+          <Container max={MAX_W.card}>
           {/* Prompt: meaning in the source language → guess the target word */}
           <View className="items-center rounded-card bg-surface px-6 py-10">
             {/* Star / add to drill list */}
@@ -268,10 +271,12 @@ export default function SrsScreen() {
               </View>
             )}
           </View>
+          </Container>
         </ScrollView>
 
         {/* Actions */}
         <View className="px-5 pb-2 pt-2">
+          <Container max={MAX_W.card}>
           {!revealed ? (
             <View className="flex-row gap-2">
               <Pressable
@@ -310,6 +315,7 @@ export default function SrsScreen() {
               <Text className="text-base font-bold text-white">Got it — continue</Text>
             </Pressable>
           )}
+          </Container>
         </View>
       </KeyboardAvoidingView>
 
@@ -329,6 +335,7 @@ function Header({
   const pct = progress && progress.total > 0 ? progress.done / progress.total : 0;
   return (
     <View className="px-5 py-3">
+      <Container max={MAX_W.card}>
       <View className="flex-row items-center justify-between">
         <Text className="text-lg font-bold text-textHi">{title}</Text>
         <Pressable
@@ -351,6 +358,7 @@ function Header({
           </Text>
         </>
       )}
+      </Container>
     </View>
   );
 }

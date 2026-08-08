@@ -13,7 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Container } from '@/components/container';
 import { useAuthUser } from '@/hooks/use-auth';
+import { MAX_W } from '@/hooks/use-responsive';
 import { langInfo, useSourceLang, useTargetLang } from '@/lib/lang';
 import { getSupabase } from '@/lib/supabase';
 import { colors } from '@/theme/tokens';
@@ -123,6 +125,7 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
         <ScrollView contentContainerClassName="px-5 pt-4">
+          <Container max={MAX_W.form}>
           <Text className="text-2xl font-bold text-textHi">Profile</Text>
           <LanguageCard />
           <View className="mt-4 items-center rounded-card bg-surface p-6">
@@ -144,6 +147,7 @@ export default function ProfileScreen() {
             )}
           </Pressable>
           {error && <Text className="mt-3 text-sm text-primary">{error}</Text>}
+          </Container>
         </ScrollView>
       </SafeAreaView>
     );
@@ -156,6 +160,7 @@ export default function ProfileScreen() {
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerClassName="px-5 pt-4" keyboardShouldPersistTaps="handled">
+          <Container max={MAX_W.form}>
           <Text className="text-2xl font-bold text-textHi">Profile</Text>
           <LanguageCard />
 
@@ -245,6 +250,7 @@ export default function ProfileScreen() {
 
           {error && <Text className="mt-3 text-sm text-primary">{error}</Text>}
           {info && <Text className="mt-3 text-sm text-textLo">{info}</Text>}
+          </Container>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

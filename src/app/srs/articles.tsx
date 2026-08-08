@@ -5,8 +5,10 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ArticleInfo } from '@/components/article-info';
+import { Container } from '@/components/container';
 import { Speaker } from '@/components/speaker';
 import { WordCardModal } from '@/components/word-card-modal';
+import { MAX_W } from '@/hooks/use-responsive';
 import { nounForms } from '@/lib/inflect';
 import { definiteArticle, definiteArticlePlural } from '@/lib/italian';
 import { hasGrammar } from '@/lib/lang';
@@ -175,6 +177,7 @@ export default function ArticlesScreen() {
       <ScrollView
         className="flex-1"
         contentContainerClassName="grow justify-center px-5 py-2">
+        <Container max={MAX_W.card}>
         <View className="items-center rounded-card bg-surface px-6 py-10">
           <Text className="text-xs font-semibold uppercase tracking-widest text-textLo">
             Which article?
@@ -234,10 +237,12 @@ export default function ArticlesScreen() {
             </>
           )}
         </View>
+        </Container>
       </ScrollView>
 
       {/* Article choices — all options, grouped singular / plural */}
       <ScrollView className="grow-0" contentContainerClassName="px-5 pb-2">
+        <Container max={MAX_W.card}>
         <ChoiceRow
           articles={SINGULAR_ARTICLES}
           picked={picked}
@@ -253,17 +258,20 @@ export default function ArticlesScreen() {
           revealed={revealed}
           onPick={pick}
         />
+        </Container>
       </ScrollView>
 
       <View className="px-5 pb-2 pt-3">
-        <Pressable
-          disabled={!revealed}
-          onPress={next}
-          className={`items-center rounded-full py-4 ${revealed ? 'bg-primary' : 'bg-surfaceAlt'}`}>
-          <Text className={`text-base font-bold ${revealed ? 'text-white' : 'text-textLo'}`}>
-            {revealed ? 'Continue' : 'Pick an article'}
-          </Text>
-        </Pressable>
+        <Container max={MAX_W.card}>
+          <Pressable
+            disabled={!revealed}
+            onPress={next}
+            className={`items-center rounded-full py-4 ${revealed ? 'bg-primary' : 'bg-surfaceAlt'}`}>
+            <Text className={`text-base font-bold ${revealed ? 'text-white' : 'text-textLo'}`}>
+              {revealed ? 'Continue' : 'Pick an article'}
+            </Text>
+          </Pressable>
+        </Container>
       </View>
 
       {/* Word card over the drill — closing returns to the same question */}
@@ -324,6 +332,7 @@ function Header({ progress }: { progress: { done: number; total: number } | null
   const pct = progress && progress.total > 0 ? progress.done / progress.total : 0;
   return (
     <View className="px-5 py-3">
+      <Container max={MAX_W.card}>
       <View className="flex-row items-center justify-between">
         <Text className="text-lg font-bold text-textHi">Article drill</Text>
         <Pressable
@@ -346,6 +355,7 @@ function Header({ progress }: { progress: { done: number; total: number } | null
           </Text>
         </>
       )}
+      </Container>
     </View>
   );
 }

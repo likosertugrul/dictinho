@@ -82,7 +82,16 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   değişiminde query invalidation (`use-auth.ts`). Dashboard'da "Confirm email" KAPALI
 - 🟡 Faz 4: cümle üretimi `scripts/generate-sentences.mjs` (Groq, batch'li, idempotent)
   arka planda; UI hazır (detayda Examples bölümü, tense rozetli)
+- ✅ Responsive web (2026-08-06): `src/hooks/use-responsive.ts` (breakpoint'ler
+  md 768 / lg 1024 / xl 1360, `MAX_W`, `useColumns`) + `src/components/container.tsx`
+  (içeriği ortalar, max genişlik) + `src/components/word-list.tsx` (tek kart ↔ grid).
+  Desktop'ta (≥1024) tab bar sol kenar çubuğu (`tabBarPosition:'left'` +
+  `tabBarVariant:'material'`; navigator'ın minWidth'i pencerenin %25'i olduğu için
+  tabBarStyle'da width+minWidth 240 ZORUNLU). ≥768'de FAB yerine header'da
+  "Add word" butonu, kelime listeleri 2–3 sütun, word card modal ortalanmış dialog.
+  `useWindowDimensions` sayesinde pencere küçülünce reload'suz mobil tasarıma döner
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, tema tag'leri, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
-- Not: claude-in-chrome extension bu makinede bağlanmıyor — görsel doğrulamayı
-  kullanıcı yapıyor; ben tsc + bundle + Node ile RLS/RPC simülasyonu doğruluyorum
+- Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için
+  headless Chrome + CDP script'i çalışıyor (bkz. global memory
+  `headless-chrome-cdp-screenshots`) — Playwright'a gerek yok

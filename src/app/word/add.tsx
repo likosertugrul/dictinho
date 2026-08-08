@@ -14,8 +14,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Container } from '@/components/container';
 import { useEnrichWord } from '@/hooks/use-enrich-word';
 import { useLexiconSearch, type SearchLang } from '@/hooks/use-lexicon-search';
+import { MAX_W } from '@/hooks/use-responsive';
 import { conjugateRegular } from '@/lib/conjugator';
 import { adjectiveForms, nounForms } from '@/lib/inflect';
 import { hasGrammar, langInfo, useSourceLang, useTargetLang } from '@/lib/lang';
@@ -194,20 +196,25 @@ export default function AddWordScreen() {
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Header */}
-        <View className="flex-row items-center justify-between px-5 py-3">
-          <Text className="text-2xl font-bold text-textHi">Add word</Text>
-          <Pressable
-            accessibilityLabel="Close"
-            onPress={() => router.back()}
-            className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
-            <Ionicons name="close" size={20} color={colors.textHi} />
-          </Pressable>
+        <View className="px-5 py-3">
+          <Container max={MAX_W.content}>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-2xl font-bold text-textHi">Add word</Text>
+              <Pressable
+                accessibilityLabel="Close"
+                onPress={() => router.back()}
+                className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
+                <Ionicons name="close" size={20} color={colors.textHi} />
+              </Pressable>
+            </View>
+          </Container>
         </View>
 
         <ScrollView
           className="flex-1"
           contentContainerClassName="px-5 pb-6"
           keyboardShouldPersistTaps="handled">
+          <Container max={MAX_W.content}>
           {/* Search input + language direction toggle */}
           <View className="mb-2 flex-row items-center justify-between">
             <Text className="text-sm font-semibold text-textLo">
@@ -638,23 +645,26 @@ export default function AddWordScreen() {
           {addWord.isError && (
             <Text className="mt-4 text-sm text-primary">{addWord.error.message}</Text>
           )}
+          </Container>
         </ScrollView>
 
         {/* Save */}
         <View className="px-5 pb-2 pt-2">
-          <Pressable
-            accessibilityLabel="Save word"
-            disabled={!canSave}
-            onPress={save}
-            className={`items-center rounded-full py-4 ${canSave ? 'bg-primary' : 'bg-surfaceAlt'}`}>
-            {addWord.isPending ? (
-              <ActivityIndicator color={colors.onPrimary} />
-            ) : (
-              <Text className={`text-base font-bold ${canSave ? 'text-white' : 'text-textLo'}`}>
-                Save word
-              </Text>
-            )}
-          </Pressable>
+          <Container max={MAX_W.content}>
+            <Pressable
+              accessibilityLabel="Save word"
+              disabled={!canSave}
+              onPress={save}
+              className={`items-center rounded-full py-4 ${canSave ? 'bg-primary' : 'bg-surfaceAlt'}`}>
+              {addWord.isPending ? (
+                <ActivityIndicator color={colors.onPrimary} />
+              ) : (
+                <Text className={`text-base font-bold ${canSave ? 'text-white' : 'text-textLo'}`}>
+                  Save word
+                </Text>
+              )}
+            </Pressable>
+          </Container>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

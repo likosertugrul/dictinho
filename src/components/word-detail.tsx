@@ -12,7 +12,9 @@ import {
 } from 'react-native';
 
 import { ArticleInfo } from '@/components/article-info';
+import { Container } from '@/components/container';
 import { Speaker } from '@/components/speaker';
+import { MAX_W } from '@/hooks/use-responsive';
 import { adjectiveForms } from '@/lib/inflect';
 import {
   PERSON_LABELS,
@@ -181,7 +183,9 @@ export function WordDetail({
   return (
     <View className="flex-1 bg-bg">
       {/* Header */}
-      <View className="flex-row items-start justify-between px-5 py-3">
+      <View className="px-5 py-3">
+        <Container max={MAX_W.content}>
+        <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-3">
           <View className="flex-row items-center gap-2">
             <Text className="text-3xl font-bold text-textHi">{headword}</Text>
@@ -220,6 +224,8 @@ export function WordDetail({
             <Ionicons name="close" size={20} color={colors.textHi} />
           </Pressable>
         </View>
+        </View>
+        </Container>
       </View>
 
       <KeyboardAvoidingView
@@ -229,6 +235,7 @@ export function WordDetail({
           className="flex-1"
           contentContainerClassName="px-5 pb-8"
           keyboardShouldPersistTaps="handled">
+          <Container max={MAX_W.content}>
           {/* Move between lists */}
           <View className="mt-1 flex-row gap-2">
             {(
@@ -527,6 +534,7 @@ export function WordDetail({
               )}
             </View>
           )}
+          </Container>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
