@@ -114,7 +114,20 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   Bitiş ekranında "Look back" ile de geçmişe girilebiliyor
 - ✅ `closeModal()` (`src/lib/nav.ts`): URL ile doğrudan açılan modal'da
   `router.back()` hiçbir şey yapmıyordu (kaydettikten sonra ekranda kalıyordu)
-- ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, tema tag'leri, onboarding
+- ✅ Konu (topic) ekseni (2026-08-08): kelimeler `pos` gibi ikinci bir eksende de
+  gruplanıyor — `src/lib/topics.ts` (19 sabit anahtar + etiket + Ionicons ikonu),
+  DB'de `lexicon_entries.topic` / `user_words.topic` (0015; iki arama RPC'si de
+  topic döndürüyor). enrich-word konuyu da üretiyor; add ekranında konu çipleri,
+  kelime kartında "Topic → Change", Home ve words ekranında konu filtre barı.
+  Practice'te konular tiklenip **mix** oturumu açılıyor (`mode=topics&topics=a,b`),
+  words ekranında "Select" ile tek tek kelime seçilip (`mode=picked`) pratik
+  yapılıyor — seçim URL'e sığmayacağı için `src/lib/practice-selection.ts`
+  bellek store'unda (reload'da kayboluyor, ekran bunu söylüyor)
+- ✅ Konu backfill: `scripts/classify-topics.mjs` (Groq, 40'lık batch, idempotent)
+  1224 lexicon kaydını sınıflandırdı; `backfill_user_word_topics()` RPC'si (0016)
+  ile 399 kişisel kelime lexicon'dan devraldı, lexicon'suz 15 kelime ayrıca
+  sınıflandırıldı → 414/414 kelimede konu var
+- ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için
   headless Chrome + CDP script'i çalışıyor (bkz. global memory

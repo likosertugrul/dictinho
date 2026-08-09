@@ -38,6 +38,7 @@ import {
   type Tense,
 } from '@/lib/italian';
 import type { LexiconSuggestion, WordStatus } from '@/lib/schemas';
+import { TOPIC_ICONS, TOPIC_LABELS, TOPIC_VALUES, type Topic } from '@/lib/topics';
 import { useAddWord, useLexiconConjugations, useRecentWords } from '@/lib/words';
 import { speechService } from '@/services/speech';
 import { colors } from '@/theme/tokens';
@@ -105,6 +106,8 @@ export default function AddWordScreen() {
   const [manualPos, setManualPos] = useState<Pos>('noun');
   const [posTouched, setPosTouched] = useState(false);
   const [manualGender, setManualGender] = useState<'m' | 'f' | null>(null);
+  // Theme bucket; the dictionary/AI entry pre-selects it, the user can change it
+  const [topic, setTopic] = useState<Topic | null>(null);
   const [manualAux, setManualAux] = useState<Auxiliary>('avere');
 
   // Anything with a space is an idiom / set phrase ("in bocca al lupo"), which
@@ -164,6 +167,7 @@ export default function AddWordScreen() {
     setSelected(s);
     setQuery(s.lemma);
     setTranslation(s.translation ?? '');
+    setTopic(s.topic ?? null);
     setExtraSenses([]);
   };
 
@@ -194,6 +198,7 @@ export default function AddWordScreen() {
   const reset = () => {
     setSelected(null);
     setTranslation('');
+    setTopic(null);
     setAiAlternatives([]);
     setExtraSenses([]);
   };
@@ -229,6 +234,7 @@ export default function AddWordScreen() {
         gender: selected?.gender ?? (effectivePos === 'noun' ? manualGender : null),
         auxiliary: selected?.auxiliary ?? (isVerb ? manualAux : null),
         cefr: selected?.cefr ?? null,
+        topic,
         lexicon_ref: selected?.id ?? null,
         notes: notes.trim() || null,
         status,
@@ -243,6 +249,7 @@ export default function AddWordScreen() {
           gender: s.gender,
           auxiliary: s.auxiliary,
           cefr: s.cefr,
+          topic: s.topic ?? topic,
           lexicon_ref: s.id,
           notes: null,
           status,
@@ -724,6 +731,33 @@ export default function AddWordScreen() {
             }
             return null;
           })()}
+
+          {/* Topic — the theme this word belongs to (food, travel…) */}
+          <Text className="mb-2 mt-6 text-sm font-semibold text-textLo">Topic</Text>
+          <View className="flex-row flex-wrap gap-2">
+            {TOPIC_VALUES.map((t) => {
+              const active = topic === t;
+              return (
+                <Pressable
+                  key={t}
+                  accessibilityLabel={`Topic ${TOPIC_LABELS[t]}`}
+                  onPress={() => setTopic(active ? null : t)}
+                  className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-1.5 ${
+                    active ? 'bg-primary' : 'bg-surfaceAlt'
+                  }`}>
+                  <Ionicons
+                    name={TOPIC_ICONS[t]}
+                    size={13}
+                    color={active ? colors.onPrimary : colors.textLo}
+                  />
+                  <Text
+                    className={`text-sm font-semibold ${active ? 'text-white' : 'text-textLo'}`}>
+                    {TOPIC_LABELS[t]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
           {/* Which list */}
           <Text className="mb-2 mt-6 text-sm font-semibold text-textLo">Add to</Text>

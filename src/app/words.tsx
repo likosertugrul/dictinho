@@ -8,6 +8,8 @@ import { Container } from '@/components/container';
 import { WordList } from '@/components/word-list';
 import { useColumns } from '@/hooks/use-responsive';
 import { POS_LABELS, POS_VALUES, type Pos } from '@/lib/italian';
+import { setPickedWords } from '@/lib/practice-selection';
+import { TOPIC_ICONS, TOPIC_LABELS, TOPIC_VALUES, type Topic } from '@/lib/topics';
 import { closeModal } from '@/lib/nav';
 import type { UserWord } from '@/lib/schemas';
 import { useToughWords, useWrongWords } from '@/lib/srs';
@@ -41,6 +43,10 @@ export default function WordsScreen() {
   const [posFilter, setPosFilter] = useState<Pos | 'all'>('all');
   const [sortKey, setSortKey] = useState<'recent' | 'alpha'>('recent');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [topicFilter, setTopicFilter] = useState<Topic | 'all'>('all');
+  // Hand-picking words for a "practice just these" session
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const pickSort = (key: 'recent' | 'alpha') => {
     if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -69,11 +75,29 @@ export default function WordsScreen() {
 
   const availablePos = POS_VALUES.filter((p) => baseWords.some((w) => w.pos === p));
   const activePos = posFilter !== 'all' && !availablePos.includes(posFilter) ? 'all' : posFilter;
+  const availableTopics = TOPIC_VALUES.filter((t) => baseWords.some((w) => w.topic === t));
+  const activeTopic =
+    topicFilter !== 'all' && !availableTopics.includes(topicFilter) ? 'all' : topicFilter;
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const practiceSelected = () => {
+    if (selected.size === 0) return;
+    setPickedWords([...selected]);
+    router.push('/srs?mode=picked' as '/srs');
+  };
 
   const list = useMemo(() => {
     const needle = norm(q.trim());
     return baseWords
       .filter((w) => (activePos === 'all' ? true : w.pos === activePos))
+      .filter((w) => (activeTopic === 'all' ? true : w.topic === activeTopic))
       .filter((w) => (needle ? norm(`${w.lemma} ${w.translation}`).includes(needle) : true))
       .slice()
       .sort((a, b) => {
@@ -83,7 +107,7 @@ export default function WordsScreen() {
             : a.created_at.localeCompare(b.created_at);
         return sortDir === 'asc' ? cmp : -cmp;
       });
-  }, [baseWords, activePos, q, sortKey, sortDir]);
+  }, [baseWords, activePos, activeTopic, q, sortKey, sortDir]);
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
@@ -94,7 +118,27 @@ export default function WordsScreen() {
           {meta.title} ({list.length})
         </Text>
         <View className="flex-row items-center gap-2">
-          {meta.practiceMode && baseWords.length > 0 && (
+          {baseWords.length > 0 && (
+            <Pressable
+              accessibilityLabel={selecting ? 'Cancel selection' : 'Select words to practice'}
+              onPress={() => {
+                setSelecting((v) => !v);
+                setSelected(new Set());
+              }}
+              className={`flex-row items-center gap-1 rounded-full px-3.5 py-1.5 ${
+                selecting ? 'bg-surfaceAlt' : 'bg-surface'
+              }`}>
+              <Ionicons
+                name={selecting ? 'close' : 'checkbox-outline'}
+                size={13}
+                color={colors.textHi}
+              />
+              <Text className="text-xs font-bold text-textHi">
+                {selecting ? 'Cancel' : 'Select'}
+              </Text>
+            </Pressable>
+          )}
+          {!selecting && meta.practiceMode && baseWords.length > 0 && (
             <Pressable
               accessibilityLabel={`Practice ${meta.title}`}
               onPress={() => router.push(`/srs?mode=${meta.practiceMode}` as `/srs`)}
@@ -188,10 +232,47 @@ export default function WordsScreen() {
       )}
       </Container>
 
+      {availableTopics.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="mb-3 max-h-9 grow-0"
+          contentContainerClassName="gap-2 px-5">
+          <Pressable
+            onPress={() => setTopicFilter('all')}
+            className={`rounded-full px-4 py-1.5 ${activeTopic === 'all' ? 'bg-primary' : 'bg-surfaceAlt'}`}>
+            <Text className={`text-sm font-semibold ${activeTopic === 'all' ? 'text-white' : 'text-textLo'}`}>
+              All topics
+            </Text>
+          </Pressable>
+          {availableTopics.map((t) => (
+            <Pressable
+              key={t}
+              onPress={() => setTopicFilter(t)}
+              className={`flex-row items-center gap-1.5 rounded-full px-4 py-1.5 ${activeTopic === t ? 'bg-primary' : 'bg-surfaceAlt'}`}>
+              <Ionicons
+                name={TOPIC_ICONS[t]}
+                size={13}
+                color={activeTopic === t ? colors.onPrimary : colors.textLo}
+              />
+              <Text className={`text-sm font-semibold ${activeTopic === t ? 'text-white' : 'text-textLo'}`}>
+                {TOPIC_LABELS[t]} ({baseWords.filter((w) => w.topic === t).length})
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
       <ScrollView className="flex-1" contentContainerClassName="px-5 pb-8">
         <Container>
           {list.length > 0 ? (
-            <WordList words={list} columns={columns} />
+            <WordList
+              words={list}
+              columns={selecting ? 1 : columns}
+              selectable={selecting}
+              selectedIds={selected}
+              onToggleSelect={toggleSelect}
+            />
           ) : (
             <View className="rounded-card bg-surface">
               <Text className="px-4 py-6 text-center text-sm text-textLo">No words.</Text>
@@ -199,6 +280,33 @@ export default function WordsScreen() {
           )}
         </Container>
       </ScrollView>
+
+      {/* Practice exactly the words ticked above */}
+      {selecting && (
+        <View className="border-t border-border px-5 pb-2 pt-3">
+          <Container>
+            <Pressable
+              accessibilityLabel="Practice the selected words"
+              disabled={selected.size === 0}
+              onPress={practiceSelected}
+              className={`flex-row items-center justify-center gap-2 rounded-full py-4 ${
+                selected.size > 0 ? 'bg-primary' : 'bg-surfaceAlt'
+              }`}>
+              <Ionicons
+                name="albums"
+                size={16}
+                color={selected.size > 0 ? colors.onPrimary : colors.textLo}
+              />
+              <Text
+                className={`text-base font-bold ${selected.size > 0 ? 'text-white' : 'text-textLo'}`}>
+                {selected.size === 0
+                  ? 'Tap words to select them'
+                  : `Practice ${selected.size} word${selected.size === 1 ? '' : 's'}`}
+              </Text>
+            </Pressable>
+          </Container>
+        </View>
+      )}
     </SafeAreaView>
   );
 }

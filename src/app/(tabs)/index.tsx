@@ -8,6 +8,7 @@ import { Container } from '@/components/container';
 import { WordList } from '@/components/word-list';
 import { useColumns, useResponsive } from '@/hooks/use-responsive';
 import { POS_LABELS, POS_VALUES, type Pos } from '@/lib/italian';
+import { TOPIC_ICONS, TOPIC_LABELS, TOPIC_VALUES, type Topic } from '@/lib/topics';
 import { langInfo, useTargetLang } from '@/lib/lang';
 import { useRecentWords } from '@/lib/words';
 import { colors } from '@/theme/tokens';
@@ -27,6 +28,7 @@ export default function HomeScreen() {
   const { isTablet } = useResponsive();
   const columns = useColumns();
   const [posFilter, setPosFilter] = useState<Pos | 'all'>('all');
+  const [topicFilter, setTopicFilter] = useState<Topic | 'all'>('all');
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [listQuery, setListQuery] = useState('');
   const [sortKey, setSortKey] = useState<'recent' | 'alpha'>('recent');
@@ -46,6 +48,10 @@ export default function HomeScreen() {
   const flaggedCount = words.filter((w) => w.flagged).length;
   // Only offer classes the user actually has words in, in canonical order
   const availablePos = POS_VALUES.filter((p) => words.some((w) => w.pos === p));
+  // Only offer themes the user actually has words in, in canonical order
+  const availableTopics = TOPIC_VALUES.filter((t) => words.some((w) => w.topic === t));
+  const activeTopic =
+    topicFilter !== 'all' && !availableTopics.includes(topicFilter) ? 'all' : topicFilter;
   const activeFilter = posFilter !== 'all' && !availablePos.includes(posFilter) ? 'all' : posFilter;
   // Search the user's own list (Italian lemma or English translation)
   const q = listQuery
@@ -64,6 +70,7 @@ export default function HomeScreen() {
 
   const filteredWords = words
     .filter((w) => (activeFilter === 'all' ? true : w.pos === activeFilter))
+    .filter((w) => (activeTopic === 'all' ? true : w.topic === activeTopic))
     .filter((w) => (flaggedOnly ? w.flagged : true))
     .filter(matchesQuery)
     .slice()
@@ -250,6 +257,49 @@ export default function HomeScreen() {
                 </Pressable>
               ))}
             </ScrollView>
+
+            {/* Topic filter — the second axis, next to word class */}
+            {availableTopics.length > 1 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="mb-3"
+                contentContainerClassName="gap-2">
+                <Pressable
+                  onPress={() => setTopicFilter('all')}
+                  className={`rounded-full px-4 py-1.5 ${
+                    activeTopic === 'all' ? 'bg-primary' : 'bg-surfaceAlt'
+                  }`}>
+                  <Text
+                    className={`text-sm font-semibold ${
+                      activeTopic === 'all' ? 'text-white' : 'text-textLo'
+                    }`}>
+                    All topics
+                  </Text>
+                </Pressable>
+                {availableTopics.map((t) => {
+                  const active = activeTopic === t;
+                  return (
+                    <Pressable
+                      key={t}
+                      onPress={() => setTopicFilter(t)}
+                      className={`flex-row items-center gap-1.5 rounded-full px-4 py-1.5 ${
+                        active ? 'bg-primary' : 'bg-surfaceAlt'
+                      }`}>
+                      <Ionicons
+                        name={TOPIC_ICONS[t]}
+                        size={13}
+                        color={active ? colors.onPrimary : colors.textLo}
+                      />
+                      <Text
+                        className={`text-sm font-semibold ${active ? 'text-white' : 'text-textLo'}`}>
+                        {TOPIC_LABELS[t]} ({words.filter((w) => w.topic === t).length})
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
 
             {/* Separate lists: to-learn and known (preview 10 → See all) */}
             {learningWords.length > 0 && (

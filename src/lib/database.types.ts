@@ -14,6 +14,7 @@ type UserWordRow = {
   gender: string | null;
   auxiliary: string | null;
   cefr: string | null;
+  topic: string | null;
   notes: string | null;
   flagged: boolean;
   status: string;
@@ -21,8 +22,11 @@ type UserWordRow = {
   created_at: string;
 };
 
-type UserWordInsert = Omit<UserWordRow, 'id' | 'created_at' | 'flagged' | 'status' | 'forms'> &
-  Partial<Pick<UserWordRow, 'id' | 'created_at' | 'flagged' | 'status' | 'forms'>>;
+type UserWordInsert = Omit<
+  UserWordRow,
+  'id' | 'created_at' | 'flagged' | 'status' | 'forms' | 'topic'
+> &
+  Partial<Pick<UserWordRow, 'id' | 'created_at' | 'flagged' | 'status' | 'forms' | 'topic'>>;
 
 type LexiconEntryRow = {
   id: string;
@@ -34,6 +38,7 @@ type LexiconEntryRow = {
   auxiliary: string | null;
   is_irregular: boolean;
   cefr: string | null;
+  topic: string | null;
   frequency_rank: number | null;
   source: string;
   created_at: string;
@@ -135,7 +140,7 @@ export type Database = {
     Views: Record<string, never>;
     Functions: {
       search_lexicon_en: {
-        Args: { q: string; target: string; max_results?: number };
+        Args: { q: string; target: string; max_results?: number; src?: string };
         Returns: {
           id: string;
           lemma: string;
@@ -143,11 +148,12 @@ export type Database = {
           gender: string | null;
           auxiliary: string | null;
           cefr: string | null;
+          topic: string | null;
           translation: string | null;
         }[];
       };
       search_lexicon: {
-        Args: { q: string; target: string; max_results?: number };
+        Args: { q: string; target: string; max_results?: number; src?: string };
         Returns: {
           id: string;
           lemma: string;
@@ -155,6 +161,7 @@ export type Database = {
           gender: string | null;
           auxiliary: string | null;
           cefr: string | null;
+          topic: string | null;
           translation: string | null;
         }[];
       };

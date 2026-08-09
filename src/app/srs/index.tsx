@@ -20,6 +20,8 @@ import { WordCardModal } from '@/components/word-card-modal';
 import { MAX_W } from '@/hooks/use-responsive';
 import { matchesLemma, withArticle } from '@/lib/italian';
 import { hasGrammar, langInfo, useTargetLang } from '@/lib/lang';
+import { getPickedWords } from '@/lib/practice-selection';
+import { topicLabel } from '@/lib/topics';
 import type { UserWord } from '@/lib/schemas';
 import { useDueCards, useReviewCard, type DueCard, type PracticeMode, type Rating } from '@/lib/srs';
 import { useToggleFlag } from '@/lib/words';
@@ -41,18 +43,42 @@ function answerText(word: UserWord): string {
 }
 
 export default function SrsScreen() {
-  const { mode: modeParam, pos: posParam, known: knownParam } =
-    useLocalSearchParams<{ mode?: string; pos?: string; known?: string }>();
-  const mode: PracticeMode =
-    modeParam === 'flagged'
-      ? 'flagged'
-      : modeParam === 'wrong'
-        ? 'wrong'
-        : modeParam === 'tough'
-          ? 'tough'
-          : 'due';
+  const {
+    mode: modeParam,
+    pos: posParam,
+    known: knownParam,
+    topics: topicsParam,
+    ids: idsParam,
+  } = useLocalSearchParams<{
+    mode?: string;
+    pos?: string;
+    known?: string;
+    topics?: string;
+    ids?: string;
+  }>();
+  const MODES: PracticeMode[] = ['flagged', 'wrong', 'tough', 'topics', 'picked'];
+  const mode: PracticeMode = MODES.find((m) => m === modeParam) ?? 'due';
   const pos = posParam && posParam !== 'all' ? posParam : undefined;
-  const due = useDueCards(mode, pos, knownParam === '1');
+  const topics = (topicsParam ?? '').split(',').filter(Boolean);
+  // Hand-picked sessions carry their ids in memory (a URL can't hold hundreds),
+  // so a reload drops them — snapshot once on mount.
+  const urlIds = (idsParam ?? '').split(',').filter(Boolean);
+  const ids = useMemo(
+    () => (urlIds.length > 0 ? urlIds : getPickedWords()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const due = useDueCards({ mode, pos, includeKnown: knownParam === '1', topics, ids });
+  const sessionTitle =
+    mode === 'flagged'
+      ? 'Starred words'
+      : mode === 'picked'
+        ? 'Selected words'
+        : mode === 'topics'
+          ? topics.length === 1
+            ? topicLabel(topics[0])
+            : `${topics.length} topics`
+          : 'Flashcards';
   // Prompts name the language actually being learned (EN→ES asks for Spanish)
   const langName = langInfo(useTargetLang()).name;
   const review = useReviewCard();
@@ -162,7 +188,7 @@ export default function SrsScreen() {
     const nothingDue = initialTotal === 0 && reviewed === 0;
     return (
       <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
-        <Header title={mode === 'flagged' ? 'Starred words' : 'Flashcards'} progress={null} />
+        <Header title={sessionTitle} progress={null} />
         <View className="flex-1 items-center justify-center px-8">
           <View className="h-16 w-16 items-center justify-center rounded-full bg-surface">
             <Ionicons name="checkmark-done" size={30} color={colors.pastel.mint} />
@@ -171,14 +197,22 @@ export default function SrsScreen() {
             {nothingDue
               ? mode === 'flagged'
                 ? 'No starred words yet'
-                : 'Nothing due right now'
+                : mode === 'picked'
+                  ? 'No words selected'
+                  : mode === 'topics'
+                    ? 'Nothing in these topics'
+                    : 'Nothing due right now'
               : 'Session complete!'}
           </Text>
           <Text className="mt-2 text-center text-sm text-textLo">
             {nothingDue
               ? mode === 'flagged'
                 ? 'Star words while practicing or from a word’s page to build a drill list.'
-                : 'Add words or come back later — cards appear here when they’re due for review.'
+                : mode === 'picked'
+                  ? 'The selection is only kept while the app is open — pick the words again from your list.'
+                  : mode === 'topics'
+                    ? 'Those topics have no words to drill yet. Give some words a topic first.'
+                    : 'Add words or come back later — cards appear here when they’re due for review.'
               : `You reviewed ${reviewed} card${reviewed === 1 ? '' : 's'}. Nice work.`}
           </Text>
           <View className="mt-6 flex-row gap-2">
@@ -220,9 +254,7 @@ export default function SrsScreen() {
           title={
             past
               ? `Earlier · ${pastIndex! + 1} of ${history.length}`
-              : mode === 'flagged'
-                ? 'Starred words'
-                : 'Flashcards'
+              : sessionTitle
           }
           progress={past ? null : { done, total }}
           onBack={history.length > 0 && (pastIndex ?? history.length) > 0 ? goBack : undefined}

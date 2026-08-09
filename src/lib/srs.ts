@@ -90,13 +90,45 @@ function meaningTokens(translation: string): string[] {
  * 'flagged' → all starred words, anytime
  * 'wrong'   → words whose last answer was wrong (mistakes list), anytime
  * 'tough'   → words answered wrong many times (>= TOUGH_THRESHOLD), anytime
+ * 'topics'  → every word in the chosen themes, anytime (a topic mix)
+ * 'picked'  → exactly the words the user selected, anytime
+ *
+ * The last two ignore the schedule on purpose: the user asked for those words,
+ * so handing them "nothing due" would be useless.
  */
-export type PracticeMode = 'due' | 'flagged' | 'wrong' | 'tough';
+export type PracticeMode = 'due' | 'flagged' | 'wrong' | 'tough' | 'topics' | 'picked';
 
-export function useDueCards(mode: PracticeMode = 'due', pos?: string, includeKnown = false) {
+export interface PracticeFilter {
+  mode?: PracticeMode;
+  /** Single word class to focus on. */
+  pos?: string;
+  includeKnown?: boolean;
+  /** Themes to mix, for mode 'topics'. */
+  topics?: string[];
+  /** Explicit user_word ids, for mode 'picked'. */
+  ids?: string[];
+}
+
+export function useDueCards({
+  mode = 'due',
+  pos,
+  includeKnown = false,
+  topics = [],
+  ids = [],
+}: PracticeFilter = {}) {
   const target = useTargetLang();
+  const topicKey = [...topics].sort().join(',');
+  const idKey = [...ids].sort().join(',');
   return useQuery({
-    queryKey: ['srs', mode, pos ?? 'all', includeKnown ? 'withknown' : 'noknown', target],
+    queryKey: [
+      'srs',
+      mode,
+      pos ?? 'all',
+      includeKnown ? 'withknown' : 'noknown',
+      topicKey,
+      idKey,
+      target,
+    ],
     enabled: isSupabaseConfigured,
     staleTime: 0,
     queryFn: async (): Promise<DueCard[]> => {
@@ -165,13 +197,22 @@ export function useDueCards(mode: PracticeMode = 'due', pos?: string, includeKno
       // the user can drill those lists any time.
       const wordById = new Map(words.map((w) => [w.id, w]));
       const now = Date.now() + 30_000; // small buffer for residual clock skew
+      const idSet = new Set(ids);
+      const topicSet = new Set(topics);
       const inScope = (c: (typeof cards)[number]) => {
         const w = wordById.get(c.ref_id);
         if (!w) return false;
         if (pos && w.pos !== pos) return false; // optional word-class focus
+        // Hand-picked words come through exactly as chosen
+        if (mode === 'picked') return idSet.has(w.id);
         if (mode === 'tough') return c.wrong_count >= TOUGH_THRESHOLD;
         if (mode === 'wrong') return c.last_rating != null && c.last_rating < 3;
         if (mode === 'flagged') return w.flagged;
+        // Words never classified fall in the "other" bucket
+        if (mode === 'topics') {
+          if (topicSet.size > 0 && !topicSet.has(w.topic ?? 'other')) return false;
+          return includeKnown || w.status !== 'known';
+        }
         // 'due' drills words you're still learning — skip known unless asked
         if (!includeKnown && w.status === 'known') return false;
         return new Date(c.due_at).getTime() <= now;

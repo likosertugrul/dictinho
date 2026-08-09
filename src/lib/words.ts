@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { conjugateRegular } from '@/lib/conjugator';
 import type { Auxiliary, Cefr, Pos, Tense } from '@/lib/italian';
+import type { Topic } from '@/lib/topics';
 import { PERSONS } from '@/lib/italian';
 import { currentLangs, useTargetLang } from '@/lib/lang';
 import { userWordSchema, type UserWord, type WordStatus } from '@/lib/schemas';
@@ -15,6 +16,7 @@ export interface NewWord {
   gender: 'm' | 'f' | null;
   auxiliary: Auxiliary | null;
   cefr: Cefr | null;
+  topic: Topic | null;
   lexicon_ref: string | null;
   notes: string | null;
   status: WordStatus;
@@ -134,6 +136,7 @@ export function useAddWord() {
             auxiliary: fields.auxiliary ?? dup.auxiliary,
             gender: fields.gender ?? dup.gender,
             cefr: fields.cefr ?? dup.cefr,
+            topic: fields.topic ?? dup.topic,
             notes: fields.notes ?? dup.notes,
           })
           .eq('id', dup.id)
@@ -219,6 +222,37 @@ export function useSetStatus() {
       );
       qc.setQueryData<UserWord>(['user-words', 'detail', id], (old) =>
         old ? { ...old, status } : old,
+      );
+    },
+    onError: () => qc.invalidateQueries({ queryKey: ['user-words'] }),
+    onSuccess: (saved) => {
+      qc.invalidateQueries({ queryKey: ['user-words'] });
+      qc.setQueryData(['user-words', 'detail', saved.id], saved);
+    },
+  });
+}
+
+/** Move a word to another theme bucket (or clear it). */
+export function useSetTopic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, topic }: { id: string; topic: Topic | null }) => {
+      const { data, error } = await getSupabase()
+        .from('user_words')
+        .update({ topic })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return userWordSchema.parse(data);
+    },
+    onMutate: async ({ id, topic }) => {
+      await qc.cancelQueries({ queryKey: ['user-words'] });
+      qc.setQueriesData<UserWord[]>({ queryKey: ['user-words', 'recent'] }, (old) =>
+        old?.map((w) => (w.id === id ? { ...w, topic } : w)),
+      );
+      qc.setQueryData<UserWord>(['user-words', 'detail', id], (old) =>
+        old ? { ...old, topic } : old,
       );
     },
     onError: () => qc.invalidateQueries({ queryKey: ['user-words'] }),

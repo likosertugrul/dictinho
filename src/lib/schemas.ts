@@ -1,8 +1,10 @@
 import { z } from 'zod';
 
 import { AUXILIARIES, CEFR_LEVELS, PERSONS, POS_VALUES, TENSES } from '@/lib/italian';
+import { TOPIC_VALUES } from '@/lib/topics';
 
 export const posSchema = z.enum(POS_VALUES);
+export const topicSchema = z.enum(TOPIC_VALUES);
 export const auxiliarySchema = z.enum(AUXILIARIES);
 export const cefrSchema = z.enum(CEFR_LEVELS);
 export const tenseSchema = z.enum(TENSES);
@@ -16,6 +18,8 @@ export const lexiconSuggestionSchema = z.object({
   gender: z.enum(['m', 'f']).nullable(),
   auxiliary: auxiliarySchema.nullable(),
   cefr: cefrSchema.nullable(),
+  // Theme bucket (food, travel…) — null on entries added before topics existed
+  topic: topicSchema.nullable().catch(null).default(null),
   translation: z.string().nullable(),
 });
 export type LexiconSuggestion = z.infer<typeof lexiconSuggestionSchema>;
@@ -80,6 +84,7 @@ export const userWordSchema = z.object({
   gender: z.enum(['m', 'f']).nullable(),
   auxiliary: auxiliarySchema.nullable(),
   cefr: cefrSchema.nullable(),
+  topic: topicSchema.nullable().catch(null).default(null),
   notes: z.string().nullable(),
   flagged: z.boolean().default(false),
   status: z.enum(['learning', 'known']).default('learning'),

@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Container } from '@/components/container';
 import { MAX_W, useResponsive } from '@/hooks/use-responsive';
 import { POS_LABELS, POS_VALUES, type Pos } from '@/lib/italian';
+import { TOPIC_ICONS, TOPIC_LABELS, TOPIC_VALUES, type Topic } from '@/lib/topics';
 import { hasGrammar } from '@/lib/lang';
 import { useToughWords, useWrongWords } from '@/lib/srs';
 import { useRecentWords } from '@/lib/words';
@@ -21,6 +22,8 @@ export default function PracticeScreen() {
   const { isTablet } = useResponsive();
   const [focus, setFocus] = useState<Focus>('all');
   const [includeKnown, setIncludeKnown] = useState(false);
+  // Topics ticked for a mixed session (empty = none picked yet)
+  const [mix, setMix] = useState<Topic[]>([]);
 
   const words = recent.data ?? [];
   const starredCount = words.filter((w) => w.flagged).length;
@@ -32,6 +35,15 @@ export default function PracticeScreen() {
   ).length;
 
   const availablePos = POS_VALUES.filter((p) => words.some((w) => w.pos === p));
+  const topicCount = (t: Topic) =>
+    words.filter((w) => w.topic === t && (includeKnown || w.status !== 'known')).length;
+  const availableTopics = TOPIC_VALUES.filter((t) => words.some((w) => w.topic === t));
+  const toggleMix = (t: Topic) =>
+    setMix((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  const mixCount = mix.reduce((n, t) => n + topicCount(t), 0);
+  const practiceMix = () =>
+    router.push({ pathname: '/srs', params: { mode: 'topics', topics: mix.join(','),
+      ...(includeKnown ? { known: '1' } : {}) } });
 
   const lists = (
     [
@@ -185,6 +197,56 @@ export default function PracticeScreen() {
               </Pressable>
             )}
             </View>
+
+            {/* Topics — tick any number and drill them as one mixed session */}
+            {availableTopics.length > 0 && (
+              <View className="mb-4">
+                <Text className="mb-2 text-sm font-semibold text-textLo">Topics</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {availableTopics.map((t) => {
+                    const active = mix.includes(t);
+                    return (
+                      <Pressable
+                        key={t}
+                        accessibilityLabel={`${active ? 'Remove' : 'Add'} ${TOPIC_LABELS[t]} ${active ? 'from' : 'to'} the mix`}
+                        onPress={() => toggleMix(t)}
+                        className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${
+                          active ? 'bg-primary' : 'bg-surfaceAlt'
+                        }`}>
+                        <Ionicons
+                          name={active ? 'checkmark-circle' : TOPIC_ICONS[t]}
+                          size={14}
+                          color={active ? colors.onPrimary : colors.textLo}
+                        />
+                        <Text
+                          className={`text-sm font-semibold ${active ? 'text-white' : 'text-textLo'}`}>
+                          {TOPIC_LABELS[t]} ({topicCount(t)})
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Pressable
+                  accessibilityLabel="Practice the selected topics"
+                  disabled={mixCount === 0}
+                  onPress={practiceMix}
+                  className={`mt-3 flex-row items-center justify-center gap-2 rounded-full py-3.5 ${
+                    mixCount > 0 ? 'bg-primary' : 'bg-surfaceAlt'
+                  }`}>
+                  <Ionicons
+                    name="shuffle"
+                    size={16}
+                    color={mixCount > 0 ? colors.onPrimary : colors.textLo}
+                  />
+                  <Text
+                    className={`text-sm font-bold ${mixCount > 0 ? 'text-white' : 'text-textLo'}`}>
+                    {mix.length === 0
+                      ? 'Pick topics to mix'
+                      : `Practice ${mixCount} word${mixCount === 1 ? '' : 's'} from ${mix.length} topic${mix.length === 1 ? '' : 's'}`}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
 
             <Text className="mb-2 text-sm font-semibold text-textLo">Lists</Text>
 

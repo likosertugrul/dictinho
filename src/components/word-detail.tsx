@@ -26,6 +26,7 @@ import {
   type Tense,
 } from '@/lib/italian';
 import { hasGrammar } from '@/lib/lang';
+import { TOPIC_ICONS, TOPIC_LABELS, TOPIC_VALUES } from '@/lib/topics';
 import type { UserWord } from '@/lib/schemas';
 import {
   useAddTenses,
@@ -36,6 +37,7 @@ import {
   useRecheckForms,
   useRemoveTense,
   useSetStatus,
+  useSetTopic,
   useToggleFlag,
   useUpdateNotes,
   useWord,
@@ -129,6 +131,8 @@ export function WordDetail({
   const examples = useExamples(word.data);
   const toggleFlag = useToggleFlag();
   const setStatus = useSetStatus();
+  const setTopic = useSetTopic();
+  const [editingTopic, setEditingTopic] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // Tenses that actually have saved forms, in canonical order
@@ -259,6 +263,59 @@ export function WordDetail({
                 </Pressable>
               );
             })}
+          </View>
+
+          {/* Topic — the theme bucket this word is filed under */}
+          <View className="mt-4">
+            <View className="mb-2 flex-row items-center justify-between">
+              <Text className="text-lg font-bold text-textHi">Topic</Text>
+              <Pressable
+                accessibilityLabel={editingTopic ? 'Close topic picker' : 'Change topic'}
+                onPress={() => setEditingTopic((v) => !v)}
+                className="rounded-full bg-surfaceAlt px-3 py-1.5">
+                <Text className="text-xs font-bold text-textHi">
+                  {editingTopic ? 'Done' : 'Change'}
+                </Text>
+              </Pressable>
+            </View>
+            {!editingTopic ? (
+              <View className="flex-row items-center gap-2 rounded-card bg-surface px-4 py-3">
+                <Ionicons
+                  name={w.topic ? TOPIC_ICONS[w.topic] : 'help-circle-outline'}
+                  size={18}
+                  color={w.topic ? colors.primary : colors.textLo}
+                />
+                <Text className={`text-sm font-semibold ${w.topic ? 'text-textHi' : 'text-textLo'}`}>
+                  {w.topic ? TOPIC_LABELS[w.topic] : 'No topic yet — tap Change'}
+                </Text>
+              </View>
+            ) : (
+              <View className="flex-row flex-wrap gap-2">
+                {TOPIC_VALUES.map((t) => {
+                  const active = w.topic === t;
+                  return (
+                    <Pressable
+                      key={t}
+                      accessibilityLabel={`Topic ${TOPIC_LABELS[t]}`}
+                      disabled={setTopic.isPending}
+                      onPress={() => setTopic.mutate({ id: w.id, topic: active ? null : t })}
+                      className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-1.5 ${
+                        active ? 'bg-primary' : 'bg-surfaceAlt'
+                      }`}>
+                      <Ionicons
+                        name={TOPIC_ICONS[t]}
+                        size={13}
+                        color={active ? colors.onPrimary : colors.textLo}
+                      />
+                      <Text
+                        className={`text-sm font-semibold ${active ? 'text-white' : 'text-textLo'}`}>
+                        {TOPIC_LABELS[t]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           {/* Nouns: every article + inflected form (definite/indefinite, sg/pl). */}

@@ -20,6 +20,12 @@ const TENSES = [
   'congiuntivo_presente',
 ];
 const COMPOUND = new Set(['passato_prossimo']);
+// Theme buckets — keep in sync with src/lib/topics.ts
+const TOPICS = [
+  'food', 'family', 'home', 'body', 'clothing', 'travel', 'city', 'nature',
+  'animals', 'work', 'school', 'technology', 'sports', 'time', 'numbers',
+  'emotions', 'communication', 'daily', 'other',
+];
 const PERSONS = ['io', 'tu', 'lui_lei', 'noi', 'voi', 'loro'];
 
 const cors = {
@@ -198,6 +204,7 @@ async function upsertEntry(
     auxiliary?: string | null;
     is_irregular?: boolean;
     cefr?: string | null;
+    topic?: string | null;
     translations: string[];
   },
 ): Promise<string> {
@@ -212,6 +219,14 @@ async function upsertEntry(
     .eq('pos', entry.pos)
     .maybeSingle();
   if (existing?.id) {
+    // Entries created before topics existed have none — fill it in now
+    if (TOPICS.includes(String(entry.topic))) {
+      await supabase
+        .from('lexicon_entries')
+        .update({ topic: entry.topic })
+        .eq('id', existing.id)
+        .is('topic', null);
+    }
     // The entry may have been added by a speaker of another language — a
     // Turkish learner must not be handed the Spanish gloss.
     const { count } = await supabase
@@ -244,6 +259,7 @@ async function upsertEntry(
       auxiliary: entry.pos === 'verb' && target === 'it' ? (entry.auxiliary ?? 'avere') : null,
       is_irregular: Boolean(entry.is_irregular),
       cefr: entry.cefr ?? null,
+      topic: TOPICS.includes(String(entry.topic)) ? entry.topic : 'other',
       frequency_rank: null,
       source: 'ai',
     })
@@ -270,7 +286,7 @@ async function upsertEntry(
 async function suggestionRow(supabase: any, entryId: string, source: string) {
   const { data: row } = await supabase
     .from('lexicon_entries')
-    .select('id, lemma, pos, gender, auxiliary, cefr')
+    .select('id, lemma, pos, gender, auxiliary, cefr, topic')
     .eq('id', entryId)
     .single();
   // Prefer the caller's language, fall back to whatever the entry has
@@ -362,6 +378,10 @@ Deno.serve(async (req) => {
 
     // Other word classes of the same spelling — English "bleach" is both a verb
     // and a noun; the app offers them alongside the sense the user asked for.
+    const topicNote =
+      `"topic": exactly one of ${TOPICS.join('|')} — the theme this word belongs to; ` +
+      `use "other" only when none fits, ` ;
+
     const sensesNote =
       `"other_senses": [{"pos": "...", "gender": "m"|"f"|null, ` +
       (target === 'it' ? `"auxiliary": "essere"|"avere"|null, ` : `"auxiliary": null, `) +
@@ -381,6 +401,7 @@ Deno.serve(async (req) => {
           `"lemma": "the ${langName} expression in its canonical dictionary form, lowercase", ` +
           `"pos": "phrase", "gender": null, "auxiliary": null, "is_irregular": false, ` +
           `"cefr": "A1".."C2", ` +
+          topicNote +
           `"translations": ["what the expression MEANS in ${srcName}, idiomatic first"], ` +
           `"literal": "word-for-word ${srcName} gloss of the ${langName} expression, or null if it is literal", ` +
           `"other_senses": []}`
@@ -389,6 +410,7 @@ Deno.serve(async (req) => {
           `"lemma": "the expression in its canonical dictionary form, lowercase", ` +
           `"pos": "phrase", "gender": null, "auxiliary": null, "is_irregular": false, ` +
           `"cefr": "A1".."C2", ` +
+          topicNote +
           `"translations": ["what it MEANS in ${srcName} (idiomatic meaning first, not word-for-word)"], ` +
           `"literal": "word-for-word ${srcName} gloss, or null if the expression is literal", ` +
           `"other_senses": []}`
@@ -401,6 +423,7 @@ Deno.serve(async (req) => {
           `"gender": "m"|"f"|null (nouns only), ` +
           auxNote +
           `"is_irregular": true|false, "cefr": "A1".."C2", ` +
+          topicNote +
           `"translations": ["1-3 accurate ${srcName} translations, including \\"${inputTerm}\\""], ` +
           sensesNote +
           `}`
@@ -410,6 +433,7 @@ Deno.serve(async (req) => {
           `"gender": "m"|"f"|null (nouns only), ` +
           auxNote +
           `"is_irregular": true|false, "cefr": "A1".."C2", ` +
+          topicNote +
           `"translations": ["1-3 accurate ${srcName} translations"], ` +
           sensesNote +
           `}`;
@@ -455,6 +479,7 @@ Deno.serve(async (req) => {
       auxiliary: info.auxiliary as string | null,
       is_irregular: Boolean(info.is_irregular),
       cefr: info.cefr as string | null,
+      topic: info.topic as string | null,
       translations,
     });
 
@@ -488,6 +513,8 @@ Deno.serve(async (req) => {
           gender: (s.gender as string) ?? null,
           auxiliary: (s.auxiliary as string) ?? null,
           cefr: (s.cefr as string) ?? null,
+          // Word classes of one lemma share a theme (bleach: verb + noun)
+          topic: (s.topic as string) ?? (info.topic as string) ?? null,
           translations: sTranslations,
         });
         alternatives.push(await suggestionRow(supabase, altId, source));
