@@ -105,6 +105,13 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   `search_lexicon`/`search_lexicon_en` artık `src` parametresi alıyor (0012),
   yoksa Türk kullanıcı İspanyolca çeviri görüyordu. `auxiliary` (essere/avere)
   yalnızca İtalyanca'da yazılıyor; İngilizce fiillerdeki hatalı "avere" temizlendi (0014)
+- ✅ Pratikte geri gitme (2026-08-08): hem flashcard (`srs/index.tsx`) hem artikel
+  alıştırması (`srs/articles.tsx`) oturum içi `history` tutuyor; header'daki geri
+  oku ile önceki kelimelere dönülüyor ("Earlier · 2 of 5"). Geri dönülen kartta
+  **cevap gizli** ("Answer hidden — try to recall it first"), yalnızca "Show answer"
+  ile açılıyor (açılınca TTS de okuyor). Geri gezinme SRS'i etkilemez — tekrar
+  puanlama/mutation yok; "Back to session" canlı kartı kaldığı yerden döndürür.
+  Bitiş ekranında "Look back" ile de geçmişe girilebiliyor
 - ✅ `closeModal()` (`src/lib/nav.ts`): URL ile doğrudan açılan modal'da
   `router.back()` hiçbir şey yapmıyordu (kaydettikten sonra ekranda kalıyordu)
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, tema tag'leri, onboarding

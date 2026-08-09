@@ -26,6 +26,13 @@ import { useToggleFlag } from '@/lib/words';
 import { speechService } from '@/services/speech';
 import { colors } from '@/theme/tokens';
 
+/** A card the user has already answered in this session. */
+interface AnsweredCard {
+  card: DueCard;
+  guess: string;
+  wasCorrect: boolean;
+}
+
 /** What the learner should have written — nouns are drilled with their article. */
 function answerText(word: UserWord): string {
   return hasGrammar(word.target_language) && word.pos === 'noun'
@@ -58,6 +65,13 @@ export default function SrsScreen() {
   const [wasCorrect, setWasCorrect] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   const [cardOpen, setCardOpen] = useState(false);
+  // Cards already answered this session, so the user can look back at them.
+  // Going back never re-schedules anything — it's reading, not reviewing.
+  const [history, setHistory] = useState<AnsweredCard[]>([]);
+  const [pastIndex, setPastIndex] = useState<number | null>(null);
+  // A revisited card starts with the answer hidden: seeing it for free would
+  // undo the recall practice. The user asks for it when they want it.
+  const [pastRevealed, setPastRevealed] = useState(false);
   const initialTotal = useMemo(() => due.data?.length ?? 0, [due.data]);
 
   useEffect(() => {
@@ -65,23 +79,30 @@ export default function SrsScreen() {
   }, [due.data]);
 
   const current = queue[0];
+  const past = pastIndex != null ? history[pastIndex] : null;
+  // The card on screen: a revisited one, or the live one
+  const shown = past?.card ?? current;
 
-  const toggleCurrentFlag = () => {
-    if (!current) return;
-    const flagged = !current.word.flagged;
-    toggleFlag.mutate({ id: current.word.id, flagged });
-    // reflect immediately in the local session queue
-    setQueue((q) =>
-      q.map((d, i) => (i === 0 ? { ...d, word: { ...d.word, flagged } } : d)),
-    );
+  const toggleShownFlag = () => {
+    if (!shown) return;
+    const flagged = !shown.word.flagged;
+    toggleFlag.mutate({ id: shown.word.id, flagged });
+    // reflect immediately in the local session state
+    const flip = (d: DueCard) =>
+      d.word.id === shown.word.id ? { ...d, word: { ...d.word, flagged } } : d;
+    setQueue((q) => q.map(flip));
+    setHistory((h) => h.map((a) => ({ ...a, card: flip(a.card) })));
   };
 
   // Reveal always pronounces the answer — hearing it is half the point.
+  const speakAnswer = (card: DueCard) =>
+    speechService.speak(answerText(card.word), { language: card.word.target_language });
+
   const reveal = (correct: boolean) => {
     if (!current) return;
     setWasCorrect(correct);
     setRevealed(true);
-    speechService.speak(answerText(current.word), { language: current.word.target_language });
+    speakAnswer(current);
   };
 
   const check = () => {
@@ -95,6 +116,7 @@ export default function SrsScreen() {
   const next = (rating: Rating) => {
     if (!current) return;
     review.mutate({ card: current.card, rating });
+    setHistory((h) => [...h, { card: current, guess: guess.trim(), wasCorrect }]);
     setReviewed((n) => n + 1);
     setGuess('');
     setRevealed(false);
@@ -106,6 +128,27 @@ export default function SrsScreen() {
     });
   };
 
+  // ── Looking back at earlier cards ──────────────────────────────────────────
+  const openPast = (index: number) => {
+    setPastIndex(index);
+    setPastRevealed(false);
+    setCardOpen(false);
+  };
+  const goBack = () => {
+    const index = (pastIndex ?? history.length) - 1;
+    if (index >= 0) openPast(index);
+  };
+  const goForward = () => {
+    if (pastIndex == null) return;
+    if (pastIndex + 1 >= history.length) resumeSession();
+    else openPast(pastIndex + 1);
+  };
+  const resumeSession = () => {
+    setPastIndex(null);
+    setPastRevealed(false);
+    setCardOpen(false);
+  };
+
   if (due.isLoading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-bg">
@@ -114,8 +157,8 @@ export default function SrsScreen() {
     );
   }
 
-  // Empty / finished state
-  if (!current) {
+  // Empty / finished state (a revisited card keeps the session on screen)
+  if (!shown) {
     const nothingDue = initialTotal === 0 && reviewed === 0;
     return (
       <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
@@ -138,29 +181,52 @@ export default function SrsScreen() {
                 : 'Add words or come back later — cards appear here when they’re due for review.'
               : `You reviewed ${reviewed} card${reviewed === 1 ? '' : 's'}. Nice work.`}
           </Text>
-          <Pressable
-            onPress={() => router.back()}
-            className="mt-6 rounded-full bg-primary px-8 py-3.5">
-            <Text className="text-sm font-bold text-white">Done</Text>
-          </Pressable>
+          <View className="mt-6 flex-row gap-2">
+            {history.length > 0 && (
+              <Pressable
+                accessibilityLabel="Look back at the words you answered"
+                onPress={() => openPast(history.length - 1)}
+                className="flex-row items-center gap-1.5 rounded-full bg-surfaceAlt px-6 py-3.5">
+                <Ionicons name="arrow-back" size={14} color={colors.textHi} />
+                <Text className="text-sm font-bold text-textHi">Look back</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={() => router.back()} className="rounded-full bg-primary px-8 py-3.5">
+              <Text className="text-sm font-bold text-white">Done</Text>
+            </Pressable>
+          </View>
         </View>
       </SafeAreaView>
     );
   }
 
-  const { word } = current;
+  const { word } = shown;
   const answer = answerText(word);
   // Synonyms accepted besides the card's own word (e.g. what → cosa, che cosa)
-  const otherAccepted = current.accept.filter((l) => l !== word.lemma);
+  const otherAccepted = shown.accept.filter((l) => l !== word.lemma);
   const done = reviewed;
   const total = Math.max(initialTotal, reviewed + queue.length);
+  // What the card body shows: the live card's own state, or the past result
+  const showAnswer = past ? pastRevealed : revealed;
+  const shownCorrect = past ? past.wasCorrect : wasCorrect;
+  const shownGuess = past ? past.guess : guess;
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Header title={mode === 'flagged' ? 'Starred words' : 'Flashcards'} progress={{ done, total }} />
+        <Header
+          title={
+            past
+              ? `Earlier · ${pastIndex! + 1} of ${history.length}`
+              : mode === 'flagged'
+                ? 'Starred words'
+                : 'Flashcards'
+          }
+          progress={past ? null : { done, total }}
+          onBack={history.length > 0 && (pastIndex ?? history.length) > 0 ? goBack : undefined}
+        />
 
         <ScrollView
           className="flex-1"
@@ -171,14 +237,14 @@ export default function SrsScreen() {
           <View className="items-center rounded-card bg-surface px-6 py-10">
             {/* Star / add to drill list */}
             <Pressable
-              accessibilityLabel={current.word.flagged ? 'Unstar word' : 'Star for later practice'}
-              onPress={toggleCurrentFlag}
+              accessibilityLabel={word.flagged ? 'Unstar word' : 'Star for later practice'}
+              onPress={toggleShownFlag}
               hitSlop={10}
               className="absolute right-3 top-3 h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
               <Ionicons
-                name={current.word.flagged ? 'star' : 'star-outline'}
+                name={word.flagged ? 'star' : 'star-outline'}
                 size={18}
-                color={current.word.flagged ? colors.pastel.yellow : colors.textLo}
+                color={word.flagged ? colors.pastel.yellow : colors.textLo}
               />
             </Pressable>
 
@@ -193,39 +259,60 @@ export default function SrsScreen() {
               {word.cefr ? <Badge label={word.cefr} /> : null}
             </View>
 
-            {!revealed ? (
-              <View className="mt-6 w-full flex-row items-center rounded-2xl bg-surfaceAlt px-4">
-                <TextInput
-                  value={guess}
-                  onChangeText={setGuess}
-                  onSubmitEditing={check}
-                  placeholder={`type the ${langName} word…`}
-                  placeholderTextColor={colors.textLo}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoFocus
-                  returnKeyType="done"
-                  className="flex-1 py-3.5 text-center text-lg text-textHi"
-                />
-                {guess.length > 0 && (
-                  <Pressable accessibilityLabel="Clear" hitSlop={8} onPress={() => setGuess('')}>
-                    <Ionicons name="close-circle" size={20} color={colors.textLo} />
-                  </Pressable>
-                )}
-              </View>
+            {!showAnswer ? (
+              past ? (
+                // Revisited card: the answer stays covered until asked for
+                <View className="mt-6 w-full items-center rounded-2xl bg-surfaceAlt px-4 py-5">
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons
+                      name={past.wasCorrect ? 'checkmark-circle' : 'close-circle'}
+                      size={18}
+                      color={past.wasCorrect ? colors.pastel.mint : colors.primary}
+                    />
+                    <Text
+                      className="text-sm font-bold"
+                      style={{ color: past.wasCorrect ? colors.pastel.mint : colors.primary }}>
+                      {past.wasCorrect ? 'You got this one right' : 'You missed this one'}
+                    </Text>
+                  </View>
+                  <Text className="mt-2 text-center text-xs text-textLo">
+                    Answer hidden — try to recall it first.
+                  </Text>
+                </View>
+              ) : (
+                <View className="mt-6 w-full flex-row items-center rounded-2xl bg-surfaceAlt px-4">
+                  <TextInput
+                    value={guess}
+                    onChangeText={setGuess}
+                    onSubmitEditing={check}
+                    placeholder={`type the ${langName} word…`}
+                    placeholderTextColor={colors.textLo}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoFocus
+                    returnKeyType="done"
+                    className="flex-1 py-3.5 text-center text-lg text-textHi"
+                  />
+                  {guess.length > 0 && (
+                    <Pressable accessibilityLabel="Clear" hitSlop={8} onPress={() => setGuess('')}>
+                      <Ionicons name="close-circle" size={20} color={colors.textLo} />
+                    </Pressable>
+                  )}
+                </View>
+              )
             ) : (
               <View className="mt-6 w-full items-center">
                 {/* Result */}
                 <View className="flex-row items-center gap-2">
                   <Ionicons
-                    name={wasCorrect ? 'checkmark-circle' : 'close-circle'}
+                    name={shownCorrect ? 'checkmark-circle' : 'close-circle'}
                     size={22}
-                    color={wasCorrect ? colors.pastel.mint : colors.primary}
+                    color={shownCorrect ? colors.pastel.mint : colors.primary}
                   />
                   <Text
                     className="text-lg font-bold"
-                    style={{ color: wasCorrect ? colors.pastel.mint : colors.primary }}>
-                    {wasCorrect ? 'Correct!' : 'Not quite'}
+                    style={{ color: shownCorrect ? colors.pastel.mint : colors.primary }}>
+                    {shownCorrect ? 'Correct!' : 'Not quite'}
                   </Text>
                 </View>
                 {/* The right answer — tap it to open the full word card */}
@@ -244,8 +331,8 @@ export default function SrsScreen() {
                     label="Listen to the answer"
                   />
                 </View>
-                {!wasCorrect && guess.trim().length > 0 && (
-                  <Text className="mt-1 text-sm text-textLo">you wrote: {guess.trim()}</Text>
+                {!shownCorrect && shownGuess.trim().length > 0 && (
+                  <Text className="mt-1 text-sm text-textLo">you wrote: {shownGuess.trim()}</Text>
                 )}
                 {/* Other accepted synonyms for this meaning */}
                 {otherAccepted.length > 0 && (
@@ -277,7 +364,53 @@ export default function SrsScreen() {
         {/* Actions */}
         <View className="px-5 pb-2 pt-2">
           <Container max={MAX_W.card}>
-          {!revealed ? (
+          {past ? (
+            // Looking back: reveal on demand, and step through without rating
+            <View className="gap-2">
+              {!pastRevealed && (
+                <Pressable
+                  accessibilityLabel="Show the answer for this word"
+                  onPress={() => {
+                    setPastRevealed(true);
+                    speakAnswer(past.card);
+                  }}
+                  className="flex-row items-center justify-center gap-2 rounded-full bg-primary py-4">
+                  <Ionicons name="eye-outline" size={18} color={colors.onPrimary} />
+                  <Text className="text-base font-bold text-white">Show answer</Text>
+                </Pressable>
+              )}
+              <View className="flex-row gap-2">
+                <Pressable
+                  accessibilityLabel="Previous word"
+                  disabled={pastIndex === 0}
+                  onPress={goBack}
+                  className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-full py-4 ${
+                    pastIndex === 0 ? 'bg-surface' : 'bg-surfaceAlt'
+                  }`}>
+                  <Ionicons
+                    name="chevron-back"
+                    size={16}
+                    color={pastIndex === 0 ? colors.border : colors.textHi}
+                  />
+                  <Text
+                    className={`text-sm font-bold ${pastIndex === 0 ? 'text-border' : 'text-textHi'}`}>
+                    Previous
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel={
+                    pastIndex! + 1 >= history.length ? 'Back to the session' : 'Next word'
+                  }
+                  onPress={goForward}
+                  className="flex-1 flex-row items-center justify-center gap-1.5 rounded-full bg-surfaceAlt py-4">
+                  <Text className="text-sm font-bold text-textHi">
+                    {pastIndex! + 1 >= history.length ? 'Back to session' : 'Next'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textHi} />
+                </Pressable>
+              </View>
+            </View>
+          ) : !revealed ? (
             <View className="flex-row gap-2">
               <Pressable
                 onPress={giveUp}
@@ -328,16 +461,30 @@ export default function SrsScreen() {
 function Header({
   title,
   progress,
+  onBack,
 }: {
   title: string;
   progress: { done: number; total: number } | null;
+  /** Step back to the previously answered card; hidden on the first one. */
+  onBack?: () => void;
 }) {
   const pct = progress && progress.total > 0 ? progress.done / progress.total : 0;
   return (
     <View className="px-5 py-3">
       <Container max={MAX_W.card}>
       <View className="flex-row items-center justify-between">
-        <Text className="text-lg font-bold text-textHi">{title}</Text>
+        <View className="flex-1 flex-row items-center gap-2">
+          {onBack && (
+            <Pressable
+              accessibilityLabel="Previous word"
+              onPress={onBack}
+              hitSlop={8}
+              className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
+              <Ionicons name="chevron-back" size={20} color={colors.textHi} />
+            </Pressable>
+          )}
+          <Text className="text-lg font-bold text-textHi">{title}</Text>
+        </View>
         <Pressable
           accessibilityLabel="Close"
           onPress={() => router.back()}

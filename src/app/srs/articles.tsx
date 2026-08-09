@@ -28,6 +28,12 @@ type Question = {
   answer: string; // correct article
 };
 
+/** A question already answered this session (picked is null when skipped). */
+interface AnsweredQuestion {
+  question: Question;
+  picked: string | null;
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -74,25 +80,36 @@ export default function ArticlesScreen() {
   const [correct, setCorrect] = useState(0);
   const [answered, setAnswered] = useState(0);
   const [cardOpen, setCardOpen] = useState(false);
+  // Answered questions, so the user can step back through them. Revisiting
+  // shows the noun with the article hidden until they ask to see it.
+  const [history, setHistory] = useState<AnsweredQuestion[]>([]);
+  const [pastIndex, setPastIndex] = useState<number | null>(null);
+  const [pastRevealed, setPastRevealed] = useState(false);
 
   // Initialise the session queue once the data has loaded.
   const activeQueue = queue ?? initialQueue;
-  const current = activeQueue[0];
+  const live = activeQueue[0];
+  const past = pastIndex != null ? history[pastIndex] : null;
+  const current = past?.question ?? live;
   const total = answered + activeQueue.length;
 
-  const pick = (article: string) => {
-    if (picked || !current) return;
-    setPicked(article);
-    if (article === current.answer) setCorrect((n) => n + 1);
+  const say = (q: Question, article: string) =>
     // Elided article glues to the noun: l'acqua, not "l' acqua"
-    const spoken =
-      current.answer === "l'" ? `${current.answer}${current.form}` : `${current.answer} ${current.form}`;
-    speechService.speak(spoken, { language: 'it' });
+    speechService.speak(article === "l'" ? `${article}${q.form}` : `${article} ${q.form}`, {
+      language: 'it',
+    });
+
+  const pick = (article: string) => {
+    if (picked || !live || past) return;
+    setPicked(article);
+    if (article === live.answer) setCorrect((n) => n + 1);
+    say(live, live.answer);
   };
 
   const next = () => {
-    if (!current) return;
-    const wasWrong = picked !== current.answer;
+    if (!live) return;
+    const wasWrong = picked !== live.answer;
+    setHistory((h) => [...h, { question: live, picked }]);
     setAnswered((n) => n + 1);
     setPicked(null);
     setCardOpen(false);
@@ -104,12 +121,35 @@ export default function ArticlesScreen() {
     });
   };
 
+  // ── Looking back at earlier questions ──────────────────────────────────────
+  const openPast = (index: number) => {
+    setPastIndex(index);
+    setPastRevealed(false);
+    setCardOpen(false);
+  };
+  const goBack = () => {
+    const index = (pastIndex ?? history.length) - 1;
+    if (index >= 0) openPast(index);
+  };
+  const resumeSession = () => {
+    setPastIndex(null);
+    setPastRevealed(false);
+    setCardOpen(false);
+  };
+  const goForward = () => {
+    if (pastIndex == null) return;
+    if (pastIndex + 1 >= history.length) resumeSession();
+    else openPast(pastIndex + 1);
+  };
+
   const restart = () => {
     setQueue(shuffle(nouns).map(buildQuestion).filter((q): q is Question => q !== null));
     setPicked(null);
     setCorrect(0);
     setAnswered(0);
     setCardOpen(false);
+    setHistory([]);
+    resumeSession();
   };
 
   if (recent.isLoading) {
@@ -156,6 +196,15 @@ export default function ArticlesScreen() {
             {correct} / {answered} correct ({pct}%).
           </Text>
           <View className="mt-6 flex-row gap-2">
+            {history.length > 0 && (
+              <Pressable
+                accessibilityLabel="Look back at the words you answered"
+                onPress={() => openPast(history.length - 1)}
+                className="flex-row items-center gap-1.5 rounded-full bg-surfaceAlt px-6 py-3.5">
+                <Ionicons name="arrow-back" size={14} color={colors.textHi} />
+                <Text className="text-sm font-bold text-textHi">Look back</Text>
+              </Pressable>
+            )}
             <Pressable onPress={restart} className="rounded-full bg-primary px-7 py-3.5">
               <Text className="text-sm font-bold text-white">Practice again</Text>
             </Pressable>
@@ -168,11 +217,17 @@ export default function ArticlesScreen() {
     );
   }
 
-  const revealed = picked !== null;
+  // A revisited question keeps its article hidden until the user asks for it
+  const shownPicked = past ? past.picked : picked;
+  const revealed = past ? pastRevealed : picked !== null;
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
-      <Header progress={{ done: answered, total }} />
+      <Header
+        progress={past ? null : { done: answered, total }}
+        title={past ? `Earlier · ${pastIndex! + 1} of ${history.length}` : undefined}
+        onBack={history.length > 0 && (pastIndex ?? history.length) > 0 ? goBack : undefined}
+      />
 
       <ScrollView
         className="flex-1"
@@ -210,18 +265,38 @@ export default function ArticlesScreen() {
             </View>
           </View>
 
+          {past && !pastRevealed && (
+            <View className="mt-5 w-full items-center rounded-2xl bg-surfaceAlt px-4 py-4">
+              <View className="flex-row items-center gap-2">
+                <Ionicons
+                  name={past.picked === current.answer ? 'checkmark-circle' : 'close-circle'}
+                  size={18}
+                  color={past.picked === current.answer ? colors.pastel.mint : colors.primary}
+                />
+                <Text
+                  className="text-sm font-bold"
+                  style={{ color: past.picked === current.answer ? colors.pastel.mint : colors.primary }}>
+                  {past.picked === current.answer ? 'You got this one right' : 'You missed this one'}
+                </Text>
+              </View>
+              <Text className="mt-2 text-center text-xs text-textLo">
+                Article hidden — try to recall it first.
+              </Text>
+            </View>
+          )}
+
           {revealed && (
             <>
               <View className="mt-5 flex-row items-center gap-2">
                 <Ionicons
-                  name={picked === current.answer ? 'checkmark-circle' : 'close-circle'}
+                  name={shownPicked === current.answer ? 'checkmark-circle' : 'close-circle'}
                   size={22}
-                  color={picked === current.answer ? colors.pastel.mint : colors.primary}
+                  color={shownPicked === current.answer ? colors.pastel.mint : colors.primary}
                 />
                 <Text
                   className="text-lg font-bold"
-                  style={{ color: picked === current.answer ? colors.pastel.mint : colors.primary }}>
-                  {picked === current.answer ? 'Correct!' : `It's "${current.answer}"`}
+                  style={{ color: shownPicked === current.answer ? colors.pastel.mint : colors.primary }}>
+                  {shownPicked === current.answer ? 'Correct!' : `It's "${current.answer}"`}
                 </Text>
               </View>
 
@@ -240,37 +315,88 @@ export default function ArticlesScreen() {
         </Container>
       </ScrollView>
 
-      {/* Article choices — all options, grouped singular / plural */}
-      <ScrollView className="grow-0" contentContainerClassName="px-5 pb-2">
-        <Container max={MAX_W.card}>
-        <ChoiceRow
-          articles={SINGULAR_ARTICLES}
-          picked={picked}
-          answer={current.answer}
-          revealed={revealed}
-          onPick={pick}
-        />
-        <View className="h-2" />
-        <ChoiceRow
-          articles={PLURAL_ARTICLES}
-          picked={picked}
-          answer={current.answer}
-          revealed={revealed}
-          onPick={pick}
-        />
-        </Container>
-      </ScrollView>
+      {/* Article choices — all options, grouped singular / plural.
+          On a revisited question they only come back with the answer. */}
+      {(!past || pastRevealed) && (
+        <ScrollView className="grow-0" contentContainerClassName="px-5 pb-2">
+          <Container max={MAX_W.card}>
+            <ChoiceRow
+              articles={SINGULAR_ARTICLES}
+              picked={shownPicked}
+              answer={current.answer}
+              revealed={revealed}
+              onPick={pick}
+            />
+            <View className="h-2" />
+            <ChoiceRow
+              articles={PLURAL_ARTICLES}
+              picked={shownPicked}
+              answer={current.answer}
+              revealed={revealed}
+              onPick={pick}
+            />
+          </Container>
+        </ScrollView>
+      )}
 
       <View className="px-5 pb-2 pt-3">
         <Container max={MAX_W.card}>
-          <Pressable
-            disabled={!revealed}
-            onPress={next}
-            className={`items-center rounded-full py-4 ${revealed ? 'bg-primary' : 'bg-surfaceAlt'}`}>
-            <Text className={`text-base font-bold ${revealed ? 'text-white' : 'text-textLo'}`}>
-              {revealed ? 'Continue' : 'Pick an article'}
-            </Text>
-          </Pressable>
+          {past ? (
+            // Looking back: reveal on demand, step through without re-answering
+            <View className="gap-2">
+              {!pastRevealed && (
+                <Pressable
+                  accessibilityLabel="Show the article for this word"
+                  onPress={() => {
+                    setPastRevealed(true);
+                    say(past.question, past.question.answer);
+                  }}
+                  className="flex-row items-center justify-center gap-2 rounded-full bg-primary py-4">
+                  <Ionicons name="eye-outline" size={18} color={colors.onPrimary} />
+                  <Text className="text-base font-bold text-white">Show answer</Text>
+                </Pressable>
+              )}
+              <View className="flex-row gap-2">
+                <Pressable
+                  accessibilityLabel="Previous word"
+                  disabled={pastIndex === 0}
+                  onPress={goBack}
+                  className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-full py-4 ${
+                    pastIndex === 0 ? 'bg-surface' : 'bg-surfaceAlt'
+                  }`}>
+                  <Ionicons
+                    name="chevron-back"
+                    size={16}
+                    color={pastIndex === 0 ? colors.border : colors.textHi}
+                  />
+                  <Text
+                    className={`text-sm font-bold ${pastIndex === 0 ? 'text-border' : 'text-textHi'}`}>
+                    Previous
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel={
+                    pastIndex! + 1 >= history.length ? 'Back to the session' : 'Next word'
+                  }
+                  onPress={goForward}
+                  className="flex-1 flex-row items-center justify-center gap-1.5 rounded-full bg-surfaceAlt py-4">
+                  <Text className="text-sm font-bold text-textHi">
+                    {pastIndex! + 1 >= history.length ? 'Back to session' : 'Next'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textHi} />
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              disabled={!revealed}
+              onPress={next}
+              className={`items-center rounded-full py-4 ${revealed ? 'bg-primary' : 'bg-surfaceAlt'}`}>
+              <Text className={`text-base font-bold ${revealed ? 'text-white' : 'text-textLo'}`}>
+                {revealed ? 'Continue' : 'Pick an article'}
+              </Text>
+            </Pressable>
+          )}
         </Container>
       </View>
 
@@ -328,13 +454,33 @@ function ChoiceRow({
   );
 }
 
-function Header({ progress }: { progress: { done: number; total: number } | null }) {
+function Header({
+  progress,
+  title,
+  onBack,
+}: {
+  progress: { done: number; total: number } | null;
+  title?: string;
+  /** Step back to the previously answered question; hidden on the first one. */
+  onBack?: () => void;
+}) {
   const pct = progress && progress.total > 0 ? progress.done / progress.total : 0;
   return (
     <View className="px-5 py-3">
       <Container max={MAX_W.card}>
       <View className="flex-row items-center justify-between">
-        <Text className="text-lg font-bold text-textHi">Article drill</Text>
+        <View className="flex-1 flex-row items-center gap-2">
+          {onBack && (
+            <Pressable
+              accessibilityLabel="Previous word"
+              onPress={onBack}
+              hitSlop={8}
+              className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
+              <Ionicons name="chevron-back" size={20} color={colors.textHi} />
+            </Pressable>
+          )}
+          <Text className="text-lg font-bold text-textHi">{title ?? 'Article drill'}</Text>
+        </View>
         <Pressable
           accessibilityLabel="Close"
           onPress={() => router.back()}
