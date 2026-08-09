@@ -28,6 +28,7 @@ import {
   sessionKey,
   type SavedSession,
 } from '@/lib/practice-session';
+import { setAutoSpeak, useAutoSpeak } from '@/lib/settings';
 import { topicLabel } from '@/lib/topics';
 import type { UserWord } from '@/lib/schemas';
 import { useDueCards, useReviewCard, type DueCard, type PracticeMode, type Rating } from '@/lib/srs';
@@ -126,6 +127,8 @@ export default function SrsScreen() {
   const langName = langInfo(useTargetLang()).name;
   const review = useReviewCard();
   const toggleFlag = useToggleFlag();
+  // Reading the answer out loud on reveal can be turned off mid-drill
+  const autoSpeak = useAutoSpeak();
 
   // Local session queue (snapshot of due cards; "Again" re-queues)
   const [queue, setQueue] = useState<DueCard[]>([]);
@@ -184,9 +187,12 @@ export default function SrsScreen() {
     setHistory((h) => h.map((a) => ({ ...a, card: flip(a.card) })));
   };
 
-  // Reveal always pronounces the answer — hearing it is half the point.
-  const speakAnswer = (card: DueCard) =>
+  // Revealing pronounces the answer — hearing it is half the point — unless the
+  // user has muted automatic playback.
+  const speakAnswer = (card: DueCard) => {
+    if (!autoSpeak) return;
     speechService.speak(answerText(card.word), { language: card.word.target_language });
+  };
 
   const reveal = (correct: boolean) => {
     if (!current) return;
@@ -359,6 +365,8 @@ export default function SrsScreen() {
           progress={past ? null : { done, total }}
           onBack={history.length > 0 && (pastIndex ?? history.length) > 0 ? goBack : undefined}
           onStartOver={!past && resumedCount > 0 ? startOver : undefined}
+          autoSpeak={autoSpeak}
+          onToggleAutoSpeak={() => setAutoSpeak(!autoSpeak)}
         />
 
         <ScrollView
@@ -596,6 +604,8 @@ function Header({
   progress,
   onBack,
   onStartOver,
+  autoSpeak,
+  onToggleAutoSpeak,
 }: {
   title: string;
   progress: { done: number; total: number } | null;
@@ -603,6 +613,9 @@ function Header({
   onBack?: () => void;
   /** Shown only when the drill was picked up mid-way. */
   onStartOver?: () => void;
+  /** Speak the answer automatically when a card is revealed. */
+  autoSpeak?: boolean;
+  onToggleAutoSpeak?: () => void;
 }) {
   const pct = progress && progress.total > 0 ? progress.done / progress.total : 0;
   return (
@@ -621,12 +634,30 @@ function Header({
           )}
           <Text className="text-lg font-bold text-textHi">{title}</Text>
         </View>
-        <Pressable
-          accessibilityLabel="Close"
-          onPress={() => router.back()}
-          className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
-          <Ionicons name="close" size={20} color={colors.textHi} />
-        </Pressable>
+        <View className="flex-row items-center gap-2">
+          {onToggleAutoSpeak && speechService.isAvailable && (
+            <Pressable
+              accessibilityLabel={
+                autoSpeak ? 'Turn off automatic pronunciation' : 'Turn on automatic pronunciation'
+              }
+              onPress={onToggleAutoSpeak}
+              className={`h-9 w-9 items-center justify-center rounded-full ${
+                autoSpeak ? 'bg-primary' : 'bg-surfaceAlt'
+              }`}>
+              <Ionicons
+                name={autoSpeak ? 'volume-high' : 'volume-mute'}
+                size={18}
+                color={autoSpeak ? colors.onPrimary : colors.textLo}
+              />
+            </Pressable>
+          )}
+          <Pressable
+            accessibilityLabel="Close"
+            onPress={() => router.back()}
+            className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
+            <Ionicons name="close" size={20} color={colors.textHi} />
+          </Pressable>
+        </View>
       </View>
       {progress && (
         <>

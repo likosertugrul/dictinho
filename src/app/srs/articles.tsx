@@ -19,6 +19,7 @@ import {
 import { nounForms } from '@/lib/inflect';
 import { definiteArticle, definiteArticlePlural } from '@/lib/italian';
 import { hasGrammar } from '@/lib/lang';
+import { setAutoSpeak, useAutoSpeak } from '@/lib/settings';
 import type { UserWord } from '@/lib/schemas';
 import { speechService } from '@/services/speech';
 import { useRecentWords } from '@/lib/words';
@@ -70,6 +71,8 @@ function buildQuestion(word: UserWord, number?: 'sg' | 'pl'): Question | null {
 export default function ArticlesScreen() {
   const recent = useRecentWords();
   const words = recent.data ?? [];
+  // Saying the article + noun out loud can be muted mid-drill
+  const autoSpeak = useAutoSpeak();
 
   // Nouns with a known gender, in the current (Italian) language only.
   const nouns = useMemo(
@@ -143,11 +146,13 @@ export default function ArticlesScreen() {
   const current = past?.question ?? live;
   const total = answered + activeQueue.length;
 
-  const say = (q: Question, article: string) =>
+  const say = (q: Question, article: string) => {
+    if (!autoSpeak) return;
     // Elided article glues to the noun: l'acqua, not "l' acqua"
     speechService.speak(article === "l'" ? `${article}${q.form}` : `${article} ${q.form}`, {
       language: 'it',
     });
+  };
 
   const pick = (article: string) => {
     if (picked || !live || past) return;
@@ -299,6 +304,8 @@ export default function ArticlesScreen() {
         title={past ? `Earlier · ${pastIndex! + 1} of ${history.length}` : undefined}
         onBack={history.length > 0 && (pastIndex ?? history.length) > 0 ? goBack : undefined}
         onStartOver={!past && resumedCount > 0 ? restart : undefined}
+        autoSpeak={autoSpeak}
+        onToggleAutoSpeak={() => setAutoSpeak(!autoSpeak)}
       />
 
       <ScrollView
@@ -531,6 +538,8 @@ function Header({
   title,
   onBack,
   onStartOver,
+  autoSpeak,
+  onToggleAutoSpeak,
 }: {
   progress: { done: number; total: number } | null;
   title?: string;
@@ -538,6 +547,9 @@ function Header({
   onBack?: () => void;
   /** Shown only when the drill was picked up mid-way. */
   onStartOver?: () => void;
+  /** Speak the answer automatically when a question is answered. */
+  autoSpeak?: boolean;
+  onToggleAutoSpeak?: () => void;
 }) {
   const pct = progress && progress.total > 0 ? progress.done / progress.total : 0;
   return (
@@ -556,12 +568,30 @@ function Header({
           )}
           <Text className="text-lg font-bold text-textHi">{title ?? 'Article drill'}</Text>
         </View>
-        <Pressable
-          accessibilityLabel="Close"
-          onPress={() => router.back()}
-          className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
-          <Ionicons name="close" size={20} color={colors.textHi} />
-        </Pressable>
+        <View className="flex-row items-center gap-2">
+          {onToggleAutoSpeak && speechService.isAvailable && (
+            <Pressable
+              accessibilityLabel={
+                autoSpeak ? 'Turn off automatic pronunciation' : 'Turn on automatic pronunciation'
+              }
+              onPress={onToggleAutoSpeak}
+              className={`h-9 w-9 items-center justify-center rounded-full ${
+                autoSpeak ? 'bg-primary' : 'bg-surfaceAlt'
+              }`}>
+              <Ionicons
+                name={autoSpeak ? 'volume-high' : 'volume-mute'}
+                size={18}
+                color={autoSpeak ? colors.onPrimary : colors.textLo}
+              />
+            </Pressable>
+          )}
+          <Pressable
+            accessibilityLabel="Close"
+            onPress={() => router.back()}
+            className="h-9 w-9 items-center justify-center rounded-full bg-surfaceAlt">
+            <Ionicons name="close" size={20} color={colors.textHi} />
+          </Pressable>
+        </View>
       </View>
       {progress && (
         <>

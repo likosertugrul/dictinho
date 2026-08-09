@@ -147,6 +147,11 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   Practice'te "Random mix" kartı
 - ✅ Çoğul kuralı düzeltildi (`inflect.ts`): `-io` isimlerde son o düşer
   (formaggio → formaggi, figlio → figli); vurgulu `-ìo` listesi ile zio → zii
+- ✅ Otomatik telaffuz anahtarı (2026-08-08): `src/lib/settings.ts` (lang.ts ile aynı
+  useSyncExternalStore + AsyncStorage deseni, `autoSpeak` varsayılan açık).
+  Her iki drill'in başlığında hoparlör butonu (anında susuyor, kalıcı),
+  Settings sekmesinde "Read answers out loud" satırı. Kapalıyken manuel hoparlör
+  butonları çalışmaya devam eder — sadece otomatik okuma susar
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için
