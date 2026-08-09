@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,6 +9,13 @@ import { Container } from '@/components/container';
 import { Speaker } from '@/components/speaker';
 import { WordCardModal } from '@/components/word-card-modal';
 import { MAX_W } from '@/hooks/use-responsive';
+import {
+  clearSession,
+  loadSession,
+  saveSession,
+  sessionKey,
+  type SavedSession,
+} from '@/lib/practice-session';
 import { nounForms } from '@/lib/inflect';
 import { definiteArticle, definiteArticlePlural } from '@/lib/italian';
 import { hasGrammar } from '@/lib/lang';
@@ -43,12 +50,13 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-function buildQuestion(word: UserWord): Question | null {
+function buildQuestion(word: UserWord, number?: 'sg' | 'pl'): Question | null {
   if (word.gender == null) return null;
   const singular = word.forms?.singular ?? word.lemma;
   const plural = word.forms?.plural ?? nounForms(word.lemma, word.gender).plural;
-  // Randomly drill the singular or the plural article.
-  const askPlural = Math.random() < 0.5;
+  // Randomly drill the singular or the plural article, unless one was asked for
+  // (a restored session must put the same question back on screen).
+  const askPlural = number ? number === 'pl' : Math.random() < 0.5;
   if (askPlural) {
     const answer = definiteArticlePlural(plural, word.gender);
     if (!answer) return null;
@@ -71,7 +79,7 @@ export default function ArticlesScreen() {
 
   // Build a stable shuffled question queue once per data snapshot.
   const initialQueue = useMemo(
-    () => shuffle(nouns).map(buildQuestion).filter((q): q is Question => q !== null),
+    () => shuffle(nouns).map((w) => buildQuestion(w)).filter((q): q is Question => q !== null),
     [nouns],
   );
 
@@ -85,6 +93,48 @@ export default function ArticlesScreen() {
   const [history, setHistory] = useState<AnsweredQuestion[]>([]);
   const [pastIndex, setPastIndex] = useState<number | null>(null);
   const [pastRevealed, setPastRevealed] = useState(false);
+  // Restoring a half-finished drill (see src/lib/practice-session.ts)
+  const [resume, setResume] = useState<SavedSession | null>(null);
+  const [restored, setRestored] = useState(false);
+  const [resumedCount, setResumedCount] = useState(0);
+  const params = { mode: 'articles' };
+  const key = sessionKey(params);
+
+  useEffect(() => {
+    let alive = true;
+    loadSession(key).then((saved) => {
+      if (!alive) return;
+      setResume(saved);
+      setRestored(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [key]);
+
+  // Build the queue once, from the stored one when there is a session to resume
+  const building = useRef(false);
+  useEffect(() => {
+    if (!restored || nouns.length === 0 || building.current) return;
+    building.current = true;
+    if (resume) {
+      const byId = new Map(nouns.map((w) => [w.id, w]));
+      const restoredQueue = resume.remaining
+        .map((wordId, i) => {
+          const word = byId.get(wordId);
+          return word ? buildQuestion(word, resume.numbers?.[i]) : null;
+        })
+        .filter((q): q is Question => q !== null);
+      if (restoredQueue.length > 0) {
+        setQueue(restoredQueue);
+        setAnswered(resume.done);
+        setCorrect(resume.correct ?? 0);
+        setResumedCount(restoredQueue.length);
+        return;
+      }
+    }
+    setQueue(initialQueue);
+  }, [restored, nouns, initialQueue, resume]);
 
   // Initialise the session queue once the data has loaded.
   const activeQueue = queue ?? initialQueue;
@@ -117,7 +167,23 @@ export default function ArticlesScreen() {
       const base = q ?? initialQueue;
       const [head, ...rest] = base;
       // Re-queue wrong ones at the end of the session.
-      return wasWrong ? [...rest, head] : rest;
+      const nextQueue = wasWrong ? [...rest, head] : rest;
+      const done = answered + 1;
+      if (nextQueue.length === 0) clearSession(key);
+      else
+        saveSession({
+          key,
+          route: '/srs/articles',
+          params,
+          mode: 'articles',
+          remaining: nextQueue.map((q2) => q2.word.id),
+          numbers: nextQueue.map((q2) => q2.number),
+          done,
+          total: Math.max(done + nextQueue.length, initialQueue.length),
+          correct: correct + (picked === live.answer ? 1 : 0),
+          savedAt: Date.now(),
+        });
+      return nextQueue;
     });
   };
 
@@ -143,7 +209,10 @@ export default function ArticlesScreen() {
   };
 
   const restart = () => {
-    setQueue(shuffle(nouns).map(buildQuestion).filter((q): q is Question => q !== null));
+    clearSession(key);
+    setResume(null);
+    setResumedCount(0);
+    setQueue(shuffle(nouns).map((w) => buildQuestion(w)).filter((q): q is Question => q !== null));
     setPicked(null);
     setCorrect(0);
     setAnswered(0);
@@ -152,7 +221,9 @@ export default function ArticlesScreen() {
     resumeSession();
   };
 
-  if (recent.isLoading) {
+  // Wait for the saved session too: rendering a fresh question first would
+  // flash the wrong word and could drop the drill being restored.
+  if (recent.isLoading || !restored) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-bg">
         <ActivityIndicator color={colors.primary} />
@@ -227,6 +298,7 @@ export default function ArticlesScreen() {
         progress={past ? null : { done: answered, total }}
         title={past ? `Earlier · ${pastIndex! + 1} of ${history.length}` : undefined}
         onBack={history.length > 0 && (pastIndex ?? history.length) > 0 ? goBack : undefined}
+        onStartOver={!past && resumedCount > 0 ? restart : undefined}
       />
 
       <ScrollView
@@ -458,11 +530,14 @@ function Header({
   progress,
   title,
   onBack,
+  onStartOver,
 }: {
   progress: { done: number; total: number } | null;
   title?: string;
   /** Step back to the previously answered question; hidden on the first one. */
   onBack?: () => void;
+  /** Shown only when the drill was picked up mid-way. */
+  onStartOver?: () => void;
 }) {
   const pct = progress && progress.total > 0 ? progress.done / progress.total : 0;
   return (
@@ -496,9 +571,21 @@ function Header({
               style={{ width: `${Math.round(pct * 100)}%` }}
             />
           </View>
-          <Text className="mt-1 text-xs text-textLo">
-            {progress.done} / {progress.total}
-          </Text>
+          <View className="mt-1 flex-row items-center justify-between">
+            <Text className="text-xs text-textLo">
+              {progress.done} / {progress.total}
+            </Text>
+            {onStartOver && (
+              <Pressable
+                accessibilityLabel="Start this drill over"
+                onPress={onStartOver}
+                hitSlop={8}
+                className="flex-row items-center gap-1">
+                <Ionicons name="refresh" size={12} color={colors.textLo} />
+                <Text className="text-xs font-semibold text-textLo">Continued — start over</Text>
+              </Pressable>
+            )}
+          </View>
         </>
       )}
       </Container>

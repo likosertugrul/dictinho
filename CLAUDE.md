@@ -137,7 +137,16 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   DİKKAT: kart kuyruğu artık sadece BİR kez kuruluyor (`built` state) — her
   cevapta query invalidate olduğu için eski kod kuyruğu ortada sıfırlıyordu; ayrıca
   kuyruk kurulmadan "Nothing due" render edilirse kayıtlı oturum siliniyordu
-  (ikisi de düzeltildi, ilki zaten mevcut bir hataydı). Artikel drill'i kalıcı değil
+  (ikisi de düzeltildi, ilki zaten mevcut bir hataydı)
+- ✅ Artikel drill'i de kalıcı: store artık drill başına kayıt tutuyor (key'li map,
+  eski tek-oturum formatı okunuyor). Soru tekil/çoğul rastgele seçildiği için
+  `numbers[]` de saklanıyor, yoksa devam ederken soru değişirdi. Practice sekmesi
+  yarım kalan TÜM oturumları listeliyor ("Continue Article drill" vb.)
+- ✅ Rastgele pratik: `mode=random` — konu/takvim gözetmeksizin tüm öğrenilecek
+  kelimeler karıştırılır (karıştırma bir kez yapılır, oturum kaydında sabitlenir);
+  Practice'te "Random mix" kartı
+- ✅ Çoğul kuralı düzeltildi (`inflect.ts`): `-io` isimlerde son o düşer
+  (formaggio → formaggi, figlio → figli); vurgulu `-ìo` listesi ile zio → zii
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için

@@ -92,11 +92,19 @@ function meaningTokens(translation: string): string[] {
  * 'tough'   → words answered wrong many times (>= TOUGH_THRESHOLD), anytime
  * 'topics'  → every word in the chosen themes, anytime (a topic mix)
  * 'picked'  → exactly the words the user selected, anytime
+ * 'random'  → everything you're still learning, shuffled, anytime
  *
  * The last two ignore the schedule on purpose: the user asked for those words,
  * so handing them "nothing due" would be useless.
  */
-export type PracticeMode = 'due' | 'flagged' | 'wrong' | 'tough' | 'topics' | 'picked';
+export type PracticeMode =
+  | 'due'
+  | 'flagged'
+  | 'wrong'
+  | 'tough'
+  | 'topics'
+  | 'picked'
+  | 'random';
 
 export interface PracticeFilter {
   mode?: PracticeMode;
@@ -208,6 +216,8 @@ export function useDueCards({
         if (mode === 'tough') return c.wrong_count >= TOUGH_THRESHOLD;
         if (mode === 'wrong') return c.last_rating != null && c.last_rating < 3;
         if (mode === 'flagged') return w.flagged;
+        // No topic, no schedule — just everything worth drilling
+        if (mode === 'random') return includeKnown || w.status !== 'known';
         // Words never classified fall in the "other" bucket
         if (mode === 'topics') {
           if (topicSet.size > 0 && !topicSet.has(w.topic ?? 'other')) return false;
@@ -217,9 +227,18 @@ export function useDueCards({
         if (!includeKnown && w.status === 'known') return false;
         return new Date(c.due_at).getTime() <= now;
       };
-      return cards
-        .filter(inScope)
-        .sort((a, b) => a.due_at.localeCompare(b.due_at))
+      const scoped = cards.filter(inScope);
+      // A random mix is shuffled once here; the session then persists that
+      // order, so continuing it later keeps the same run of cards.
+      if (mode === 'random') {
+        for (let i = scoped.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [scoped[i], scoped[j]] = [scoped[j], scoped[i]];
+        }
+      } else {
+        scoped.sort((a, b) => a.due_at.localeCompare(b.due_at));
+      }
+      return scoped
         .map((card) => {
           const word = wordById.get(card.ref_id)!;
           return { card, word, accept: acceptableFor(word) };

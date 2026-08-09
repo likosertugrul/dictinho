@@ -5,6 +5,12 @@
 const VOWEL_END = /[aeiou]$/i;
 const ACCENTED_END = /[àèéìíòóùú]$/i;
 
+/** -io nouns whose i is stressed, so the plural doubles it (zio → zii). */
+const STRESSED_IO = new Set([
+  'zio', 'addio', 'brusio', 'mormorio', 'pendio', 'rinvio', 'invio', 'ronzio',
+  'fruscio', 'leggio', 'natio', 'pio', 'rio', 'oblio', 'desio', 'scalpiccio',
+]);
+
 /** Feminine singular of an -o/-e adjective (rosso→rossa, grande→grande). */
 function femSingular(lemma: string): string {
   if (lemma.endsWith('o')) return lemma.slice(0, -1) + 'a';
@@ -20,6 +26,12 @@ function pluralize(word: string, feminine: boolean): string {
 
   const last = w.slice(-1);
   const stem = w.slice(0, -1);
+
+  // -io: the plural keeps a single i when that i is unstressed (formaggio →
+  // formaggi, figlio → figli, occhio → occhi) and doubles it when it carries
+  // the stress (zio → zii). Stress isn't recoverable from the spelling, so the
+  // stressed ones — a short, mostly closed list — are named here.
+  if (w.endsWith('io')) return STRESSED_IO.has(w) ? stem + 'i' : stem;
 
   if (last === 'o') return stem + 'i'; // libro → libri
   if (last === 'e') return stem + 'i'; // cane → cani, grande → grandi

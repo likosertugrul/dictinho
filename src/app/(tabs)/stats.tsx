@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Container } from '@/components/container';
 import { MAX_W, useResponsive } from '@/hooks/use-responsive';
 import { POS_LABELS, POS_VALUES, type Pos } from '@/lib/italian';
-import { loadSession } from '@/lib/practice-session';
+import { loadSessions, type SavedSession } from '@/lib/practice-session';
 import { setPickedWords } from '@/lib/practice-selection';
 import { TOPIC_ICONS, TOPIC_LABELS, TOPIC_VALUES, type Topic } from '@/lib/topics';
 import { hasGrammar } from '@/lib/lang';
@@ -24,20 +24,35 @@ export default function PracticeScreen() {
   const tough = useToughWords();
   const { isTablet } = useResponsive();
 
-  // A drill left half-finished — offer to continue it instead of starting over
-  const session = useQuery({ queryKey: ['practice-session'], queryFn: loadSession });
+  // Drills left half-finished — offer to continue instead of starting over
+  const sessions = useQuery({ queryKey: ['practice-session'], queryFn: loadSessions });
   useFocusEffect(
     useCallback(() => {
-      session.refetch();
+      sessions.refetch();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
   );
-  const unfinished = session.data;
-  const continueSession = () => {
-    if (!unfinished) return;
-    if (unfinished.mode === 'picked') setPickedWords(unfinished.remaining);
-    router.push({ pathname: '/srs', params: unfinished.params });
+  const unfinished = sessions.data ?? [];
+  const continueSession = (s: SavedSession) => {
+    if (s.mode === 'picked') setPickedWords(s.remaining);
+    router.push({ pathname: s.route, params: s.params });
   };
+  const sessionName = (s: SavedSession) =>
+    s.mode === 'articles'
+      ? 'Article drill'
+      : s.mode === 'picked'
+        ? 'Selected words'
+        : s.mode === 'topics'
+          ? 'Topic mix'
+          : s.mode === 'random'
+            ? 'Random mix'
+            : 'Flashcards';
+
+  const practiceRandom = () =>
+    router.push({
+      pathname: '/srs',
+      params: { mode: 'random', ...(includeKnown ? { known: '1' } : {}) },
+    });
   const [focus, setFocus] = useState<Focus>('all');
   const [includeKnown, setIncludeKnown] = useState(false);
   // Topics ticked for a mixed session (empty = none picked yet)
@@ -172,26 +187,28 @@ export default function PracticeScreen() {
               </Pressable>
             )}
 
-            {/* Pick up a drill that was left half-finished */}
-            {unfinished && unfinished.remaining.length > 0 && (
+            {/* Pick up drills that were left half-finished */}
+            {unfinished.map((s) => (
               <Pressable
-                accessibilityLabel="Continue the unfinished session"
-                onPress={continueSession}
+                key={s.key}
+                accessibilityLabel={`Continue the unfinished ${sessionName(s)} session`}
+                onPress={() => continueSession(s)}
                 className="mb-4 flex-row items-center gap-3 rounded-card border border-primary bg-surface p-4">
                 <View className="h-11 w-11 items-center justify-center rounded-full bg-primary">
                   <Ionicons name="play" size={20} color={colors.onPrimary} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-base font-bold text-textHi">Continue where you left off</Text>
+                  <Text className="text-base font-bold text-textHi">
+                    Continue {sessionName(s)}
+                  </Text>
                   <Text className="text-xs text-textLo">
-                    {unfinished.done} of {unfinished.total} done ·{' '}
-                    {unfinished.remaining.length} word
-                    {unfinished.remaining.length === 1 ? '' : 's'} left
+                    {s.done} of {s.total} done · {s.remaining.length} word
+                    {s.remaining.length === 1 ? '' : 's'} left
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.primary} />
               </Pressable>
-            )}
+            ))}
 
             {/* The two drills sit side by side once there's room for them */}
             <View className={isTablet ? 'mb-4 flex-row gap-3' : ''}>
@@ -240,7 +257,24 @@ export default function PracticeScreen() {
             {/* Topics — tick any number and drill them as one mixed session */}
             {availableTopics.length > 0 && (
               <View className="mb-4">
-                <Text className="mb-2 text-sm font-semibold text-textLo">Topics</Text>
+                {/* No topic in mind — just shuffle everything */}
+            <Pressable
+              accessibilityLabel="Practice random words"
+              onPress={practiceRandom}
+              className="mb-4 flex-row items-center gap-3 rounded-card bg-surface p-4">
+              <View className="h-11 w-11 items-center justify-center rounded-full bg-surfaceAlt">
+                <Ionicons name="shuffle" size={20} color={colors.primary} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-bold text-textHi">Random mix</Text>
+                <Text className="text-xs text-textLo">
+                  All your words, shuffled — no topic, no schedule
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textLo} />
+            </Pressable>
+
+            <Text className="mb-2 text-sm font-semibold text-textLo">Topics</Text>
                 <View className="flex-row flex-wrap gap-2">
                   {availableTopics.map((t) => {
                     const active = mix.includes(t);

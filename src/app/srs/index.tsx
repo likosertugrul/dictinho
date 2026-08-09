@@ -63,7 +63,7 @@ export default function SrsScreen() {
     topics?: string;
     ids?: string;
   }>();
-  const MODES: PracticeMode[] = ['flagged', 'wrong', 'tough', 'topics', 'picked'];
+  const MODES: PracticeMode[] = ['flagged', 'wrong', 'tough', 'topics', 'picked', 'random'];
   const mode: PracticeMode = MODES.find((m) => m === modeParam) ?? 'due';
   const pos = posParam && posParam !== 'all' ? posParam : undefined;
   const topics = (topicsParam ?? '').split(',').filter(Boolean);
@@ -85,9 +85,9 @@ export default function SrsScreen() {
 
   useEffect(() => {
     let alive = true;
-    loadSession().then((saved) => {
+    loadSession(key).then((saved) => {
       if (!alive) return;
-      setResume(saved && saved.key === key ? saved : null);
+      setResume(saved);
       setRestored(true);
     });
     return () => {
@@ -119,7 +119,9 @@ export default function SrsScreen() {
           ? topics.length === 1
             ? topicLabel(topics[0])
             : `${topics.length} topics`
-          : 'Flashcards';
+          : mode === 'random'
+            ? 'Random mix'
+            : 'Flashcards';
   // Prompts name the language actually being learned (EN→ES asks for Spanish)
   const langName = langInfo(useTargetLang()).name;
   const review = useReviewCard();
@@ -215,11 +217,12 @@ export default function SrsScreen() {
       const nextQueue = rating === 'again' ? [...rest, head] : rest;
       // Remember where we got to, so closing the drill doesn't restart it
       const done = reviewed + 1;
-      if (nextQueue.length === 0) clearSession();
+      if (nextQueue.length === 0) clearSession(key);
       else
         saveSession({
           key,
-          params: mode === 'picked' ? { ...params, ids: '' } : params,
+          route: '/srs',
+          params,
           mode,
           remaining: nextQueue.map((d) => d.word.id),
           done,
@@ -253,7 +256,7 @@ export default function SrsScreen() {
 
   /** Drop the restored progress and drill the whole list again. */
   const startOver = () => {
-    clearSession();
+    clearSession(key);
     setResume(null);
     setResumedCount(0);
     setReviewed(0);
@@ -278,7 +281,7 @@ export default function SrsScreen() {
   if (!shown) {
     const nothingDue = initialTotal === 0 && reviewed === 0;
     // Nothing left to answer — a stored session for this drill is now stale
-    if (resume) clearSession();
+    if (resume) clearSession(key);
     return (
       <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
         <Header title={sessionTitle} progress={null} />
@@ -294,7 +297,9 @@ export default function SrsScreen() {
                   ? 'No words selected'
                   : mode === 'topics'
                     ? 'Nothing in these topics'
-                    : 'Nothing due right now'
+                    : mode === 'random'
+                      ? 'No words to shuffle yet'
+                      : 'Nothing due right now'
               : 'Session complete!'}
           </Text>
           <Text className="mt-2 text-center text-sm text-textLo">
@@ -305,7 +310,9 @@ export default function SrsScreen() {
                   ? 'The selection is only kept while the app is open — pick the words again from your list.'
                   : mode === 'topics'
                     ? 'Those topics have no words to drill yet. Give some words a topic first.'
-                    : 'Add words or come back later — cards appear here when they’re due for review.'
+                    : mode === 'random'
+                      ? 'Add some words first — a random mix needs something to shuffle.'
+                      : 'Add words or come back later — cards appear here when they’re due for review.'
               : `You reviewed ${reviewed} card${reviewed === 1 ? '' : 's'}. Nice work.`}
           </Text>
           <View className="mt-6 flex-row gap-2">
