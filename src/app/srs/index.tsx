@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -20,7 +20,14 @@ import { WordCardModal } from '@/components/word-card-modal';
 import { MAX_W } from '@/hooks/use-responsive';
 import { matchesLemma, withArticle } from '@/lib/italian';
 import { hasGrammar, langInfo, useTargetLang } from '@/lib/lang';
-import { getPickedWords } from '@/lib/practice-selection';
+import { getPickedWords, setPickedWords } from '@/lib/practice-selection';
+import {
+  clearSession,
+  loadSession,
+  saveSession,
+  sessionKey,
+  type SavedSession,
+} from '@/lib/practice-session';
 import { topicLabel } from '@/lib/topics';
 import type { UserWord } from '@/lib/schemas';
 import { useDueCards, useReviewCard, type DueCard, type PracticeMode, type Rating } from '@/lib/srs';
@@ -60,14 +67,48 @@ export default function SrsScreen() {
   const mode: PracticeMode = MODES.find((m) => m === modeParam) ?? 'due';
   const pos = posParam && posParam !== 'all' ? posParam : undefined;
   const topics = (topicsParam ?? '').split(',').filter(Boolean);
-  // Hand-picked sessions carry their ids in memory (a URL can't hold hundreds),
-  // so a reload drops them — snapshot once on mount.
   const urlIds = (idsParam ?? '').split(',').filter(Boolean);
-  const ids = useMemo(
-    () => (urlIds.length > 0 ? urlIds : getPickedWords()),
+
+  // A half-finished drill is restored before the cards are fetched, so the
+  // query can be built from the words that are actually still queued.
+  const [resume, setResume] = useState<SavedSession | null>(null);
+  const [restored, setRestored] = useState(false);
+  const params = useMemo(() => {
+    const p: Record<string, string> = { mode };
+    if (pos) p.pos = pos;
+    if (knownParam === '1') p.known = '1';
+    if (topics.length > 0) p.topics = topics.join(',');
+    return p;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+  }, [mode, pos, knownParam, topicsParam]);
+  const key = sessionKey(params);
+
+  useEffect(() => {
+    let alive = true;
+    loadSession().then((saved) => {
+      if (!alive) return;
+      setResume(saved && saved.key === key ? saved : null);
+      setRestored(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [key]);
+
+  // Hand-picked sessions carry their ids in memory (a URL can't hold hundreds).
+  // A restored session brings its own list, which also survives a reload.
+  const ids = useMemo(() => {
+    if (!restored) return [];
+    if (urlIds.length > 0) return urlIds;
+    const picked = getPickedWords();
+    if (picked.length > 0) return picked;
+    if (mode === 'picked' && resume) {
+      setPickedWords(resume.remaining);
+      return resume.remaining;
+    }
+    return [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restored, resume, idsParam, mode]);
   const due = useDueCards({ mode, pos, includeKnown: knownParam === '1', topics, ids });
   const sessionTitle =
     mode === 'flagged'
@@ -98,11 +139,32 @@ export default function SrsScreen() {
   // A revisited card starts with the answer hidden: seeing it for free would
   // undo the recall practice. The user asks for it when they want it.
   const [pastRevealed, setPastRevealed] = useState(false);
+  // >0 while the drill was picked up mid-way (drives the "Start over" hint)
+  const [resumedCount, setResumedCount] = useState(0);
   const initialTotal = useMemo(() => due.data?.length ?? 0, [due.data]);
 
+  // Build the queue once: later refetches (every answer invalidates the SRS
+  // query) must not shuffle the drill the user is in the middle of.
+  const [built, setBuilt] = useState(false);
+  const building = useRef(false);
   useEffect(() => {
-    if (due.data) setQueue(due.data);
-  }, [due.data]);
+    if (!restored || !due.data || building.current) return;
+    building.current = true;
+    setBuilt(true);
+    if (resume) {
+      const byWord = new Map(due.data.map((d) => [d.word.id, d]));
+      const ordered = resume.remaining
+        .map((id) => byWord.get(id))
+        .filter((d): d is DueCard => d != null);
+      if (ordered.length > 0) {
+        setQueue(ordered);
+        setReviewed(resume.done);
+        setResumedCount(ordered.length);
+        return;
+      }
+    }
+    setQueue(due.data);
+  }, [restored, due.data, resume]);
 
   const current = queue[0];
   const past = pastIndex != null ? history[pastIndex] : null;
@@ -150,7 +212,21 @@ export default function SrsScreen() {
     setQueue((q) => {
       const [head, ...rest] = q;
       // Wrong answers ("again") cycle back into this session
-      return rating === 'again' ? [...rest, head] : rest;
+      const nextQueue = rating === 'again' ? [...rest, head] : rest;
+      // Remember where we got to, so closing the drill doesn't restart it
+      const done = reviewed + 1;
+      if (nextQueue.length === 0) clearSession();
+      else
+        saveSession({
+          key,
+          params: mode === 'picked' ? { ...params, ids: '' } : params,
+          mode,
+          remaining: nextQueue.map((d) => d.word.id),
+          done,
+          total: Math.max(done + nextQueue.length, initialTotal),
+          savedAt: Date.now(),
+        });
+      return nextQueue;
     });
   };
 
@@ -175,7 +251,22 @@ export default function SrsScreen() {
     setCardOpen(false);
   };
 
-  if (due.isLoading) {
+  /** Drop the restored progress and drill the whole list again. */
+  const startOver = () => {
+    clearSession();
+    setResume(null);
+    setResumedCount(0);
+    setReviewed(0);
+    setHistory([]);
+    resumeSession();
+    setGuess('');
+    setRevealed(false);
+    setQueue(due.data ?? []);
+  };
+
+  // Wait for both the cards and the saved session — rendering "nothing due"
+  // in between would wipe a drill the user is in the middle of.
+  if (due.isLoading || !restored || !built) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-bg">
         <ActivityIndicator color={colors.primary} />
@@ -186,6 +277,8 @@ export default function SrsScreen() {
   // Empty / finished state (a revisited card keeps the session on screen)
   if (!shown) {
     const nothingDue = initialTotal === 0 && reviewed === 0;
+    // Nothing left to answer — a stored session for this drill is now stale
+    if (resume) clearSession();
     return (
       <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
         <Header title={sessionTitle} progress={null} />
@@ -258,6 +351,7 @@ export default function SrsScreen() {
           }
           progress={past ? null : { done, total }}
           onBack={history.length > 0 && (pastIndex ?? history.length) > 0 ? goBack : undefined}
+          onStartOver={!past && resumedCount > 0 ? startOver : undefined}
         />
 
         <ScrollView
@@ -494,11 +588,14 @@ function Header({
   title,
   progress,
   onBack,
+  onStartOver,
 }: {
   title: string;
   progress: { done: number; total: number } | null;
   /** Step back to the previously answered card; hidden on the first one. */
   onBack?: () => void;
+  /** Shown only when the drill was picked up mid-way. */
+  onStartOver?: () => void;
 }) {
   const pct = progress && progress.total > 0 ? progress.done / progress.total : 0;
   return (
@@ -532,9 +629,23 @@ function Header({
               style={{ width: `${Math.round(pct * 100)}%` }}
             />
           </View>
-          <Text className="mt-1 text-xs text-textLo">
-            {progress.done} / {progress.total}
-          </Text>
+          <View className="mt-1 flex-row items-center justify-between">
+            <Text className="text-xs text-textLo">
+              {progress.done} / {progress.total}
+            </Text>
+            {onStartOver && (
+              <Pressable
+                accessibilityLabel="Start this drill over"
+                onPress={onStartOver}
+                hitSlop={8}
+                className="flex-row items-center gap-1">
+                <Ionicons name="refresh" size={12} color={colors.textLo} />
+                <Text className="text-xs font-semibold text-textLo">
+                  Continued — start over
+                </Text>
+              </Pressable>
+            )}
+          </View>
         </>
       )}
       </Container>

@@ -127,6 +127,17 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   1224 lexicon kaydını sınıflandırdı; `backfill_user_word_topics()` RPC'si (0016)
   ile 399 kişisel kelime lexicon'dan devraldı, lexicon'suz 15 kelime ayrıca
   sınıflandırıldı → 414/414 kelimede konu var
+- ✅ Oturum devamlılığı (2026-08-08): flashcard oturumu `src/lib/practice-session.ts`
+  ile AsyncStorage'a yazılıyor (kalan kelime id'leri sırasıyla + done/total,
+  drill kimliği `sessionKey(params)`, 7 günden eski oturum bayat sayılır).
+  Ekran açılınca kaldığı yerden devam ediyor; Practice sekmesinde "Continue where
+  you left off — 3 of 9 done · 6 words left" kartı var; başlıkta "Continued —
+  start over" ile sıfırlanabiliyor. `mode=picked` oturumu kayıttaki id'lerden
+  yeniden kuruluyor (reload'a dayanıklı).
+  DİKKAT: kart kuyruğu artık sadece BİR kez kuruluyor (`built` state) — her
+  cevapta query invalidate olduğu için eski kod kuyruğu ortada sıfırlıyordu; ayrıca
+  kuyruk kurulmadan "Nothing due" render edilirse kayıtlı oturum siliniyordu
+  (ikisi de düzeltildi, ilki zaten mevcut bir hataydı). Artikel drill'i kalıcı değil
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için

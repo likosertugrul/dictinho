@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Container } from '@/components/container';
 import { MAX_W, useResponsive } from '@/hooks/use-responsive';
 import { POS_LABELS, POS_VALUES, type Pos } from '@/lib/italian';
+import { loadSession } from '@/lib/practice-session';
+import { setPickedWords } from '@/lib/practice-selection';
 import { TOPIC_ICONS, TOPIC_LABELS, TOPIC_VALUES, type Topic } from '@/lib/topics';
 import { hasGrammar } from '@/lib/lang';
 import { useToughWords, useWrongWords } from '@/lib/srs';
@@ -20,6 +23,21 @@ export default function PracticeScreen() {
   const wrong = useWrongWords();
   const tough = useToughWords();
   const { isTablet } = useResponsive();
+
+  // A drill left half-finished — offer to continue it instead of starting over
+  const session = useQuery({ queryKey: ['practice-session'], queryFn: loadSession });
+  useFocusEffect(
+    useCallback(() => {
+      session.refetch();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+  const unfinished = session.data;
+  const continueSession = () => {
+    if (!unfinished) return;
+    if (unfinished.mode === 'picked') setPickedWords(unfinished.remaining);
+    router.push({ pathname: '/srs', params: unfinished.params });
+  };
   const [focus, setFocus] = useState<Focus>('all');
   const [includeKnown, setIncludeKnown] = useState(false);
   // Topics ticked for a mixed session (empty = none picked yet)
@@ -151,6 +169,27 @@ export default function PracticeScreen() {
                     className={`h-5 w-5 rounded-full bg-white ${includeKnown ? 'self-end' : 'self-start'}`}
                   />
                 </View>
+              </Pressable>
+            )}
+
+            {/* Pick up a drill that was left half-finished */}
+            {unfinished && unfinished.remaining.length > 0 && (
+              <Pressable
+                accessibilityLabel="Continue the unfinished session"
+                onPress={continueSession}
+                className="mb-4 flex-row items-center gap-3 rounded-card border border-primary bg-surface p-4">
+                <View className="h-11 w-11 items-center justify-center rounded-full bg-primary">
+                  <Ionicons name="play" size={20} color={colors.onPrimary} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-base font-bold text-textHi">Continue where you left off</Text>
+                  <Text className="text-xs text-textLo">
+                    {unfinished.done} of {unfinished.total} done ·{' '}
+                    {unfinished.remaining.length} word
+                    {unfinished.remaining.length === 1 ? '' : 's'} left
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.primary} />
               </Pressable>
             )}
 
