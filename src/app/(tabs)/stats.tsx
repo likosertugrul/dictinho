@@ -38,7 +38,10 @@ export default function PracticeScreen() {
   const unfinished = sessions.data ?? [];
   const continueSession = (s: SavedSession) => {
     if (s.mode === 'picked') setPickedWords(s.remaining);
-    router.push({ pathname: s.route, params: s.params });
+    // Belt and braces: a session stored before `route` existed is normalised on
+    // read, but never navigate to an undefined pathname — that lands on Home.
+    const route = s.route ?? (s.mode === 'articles' ? '/srs/articles' : '/srs');
+    router.push({ pathname: route, params: s.params ?? { mode: s.mode } });
   };
   const sessionName = (s: SavedSession) =>
     s.mode === 'articles'

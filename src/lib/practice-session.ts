@@ -52,6 +52,21 @@ const usable = (s: SavedSession | undefined | null): s is SavedSession =>
   s.remaining.length > 0 &&
   Date.now() - (s.savedAt ?? 0) <= MAX_AGE_MS;
 
+/**
+ * Fill in fields older builds didn't store. `route` arrived with the article
+ * drill: without it a stored session reopened as `pathname: undefined`, which
+ * dropped the user on the home screen instead of their drill.
+ */
+function normalize(s: SavedSession): SavedSession {
+  const mode = s.mode ?? 'due';
+  return {
+    ...s,
+    mode,
+    route: s.route ?? (mode === 'articles' ? '/srs/articles' : '/srs'),
+    params: s.params && Object.keys(s.params).length > 0 ? s.params : { mode },
+  };
+}
+
 async function readAll(): Promise<Record<string, SavedSession>> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
@@ -61,7 +76,7 @@ async function readAll(): Promise<Record<string, SavedSession>> {
     const map: Record<string, SavedSession> =
       parsed && typeof parsed.key === 'string' ? { [parsed.key]: parsed } : parsed;
     const out: Record<string, SavedSession> = {};
-    for (const [k, v] of Object.entries(map ?? {})) if (usable(v)) out[k] = v;
+    for (const [k, v] of Object.entries(map ?? {})) if (usable(v)) out[k] = normalize(v);
     return out;
   } catch {
     return {};
