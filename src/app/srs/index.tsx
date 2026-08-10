@@ -18,8 +18,8 @@ import { Container } from '@/components/container';
 import { Speaker } from '@/components/speaker';
 import { WordCardModal } from '@/components/word-card-modal';
 import { MAX_W } from '@/hooks/use-responsive';
-import { isNearMiss, matchesLemma, withArticle } from '@/lib/italian';
-import { hasGrammar, langInfo, useTargetLang } from '@/lib/lang';
+import { isNearMiss, matchesLemma } from '@/lib/italian';
+import { langInfo, useTargetLang } from '@/lib/lang';
 import { getPickedWords, setPickedWords } from '@/lib/practice-selection';
 import {
   clearSession,
@@ -28,11 +28,19 @@ import {
   sessionKey,
   type SavedSession,
 } from '@/lib/practice-session';
-import { setAutoSpeak, useAutoSpeak } from '@/lib/settings';
+import { setAutoSpeak, useAnswerMode, useAutoSpeak } from '@/lib/settings';
 import { topicLabel } from '@/lib/topics';
 import type { UserWord } from '@/lib/schemas';
-import { useDueCards, useReviewCard, type DueCard, type PracticeMode, type Rating } from '@/lib/srs';
-import { useToggleFlag } from '@/lib/words';
+import {
+  answerText,
+  buildChoices,
+  useDueCards,
+  useReviewCard,
+  type DueCard,
+  type PracticeMode,
+  type Rating,
+} from '@/lib/srs';
+import { useRecentWords, useToggleFlag } from '@/lib/words';
 import { speechService } from '@/services/speech';
 import { colors } from '@/theme/tokens';
 
@@ -68,11 +76,15 @@ const EMPTY_HINT: Record<PracticeMode, string> = {
   random: 'Add some words first — a random mix needs something to shuffle.',
 };
 
-/** What the learner should have written — nouns are drilled with their article. */
-function answerText(word: UserWord): string {
-  return hasGrammar(word.target_language) && word.pos === 'noun'
-    ? withArticle(word.lemma, word.gender)
-    : word.lemma;
+/** Choices for a card, cached so a re-render keeps the same four options. */
+const choiceCache = new Map<string, string[]>();
+function choicesFor(card: DueCard | undefined, pool: UserWord[] | undefined): string[] {
+  if (!card || !pool) return [];
+  const cached = choiceCache.get(card.word.id);
+  if (cached) return cached;
+  const built = buildChoices(card, pool);
+  choiceCache.set(card.word.id, built);
+  return built;
 }
 
 export default function SrsScreen() {
@@ -154,6 +166,10 @@ export default function SrsScreen() {
   const toggleFlag = useToggleFlag();
   // Reading the answer out loud on reveal can be turned off mid-drill
   const autoSpeak = useAutoSpeak();
+  // Type the answer, or pick it from a few options
+  const answerMode = useAnswerMode();
+  // Distractors come from everything the user is learning, not just this drill
+  const allWords = useRecentWords();
 
   // Local session queue (snapshot of due cards; "Again" re-queues)
   const [queue, setQueue] = useState<DueCard[]>([]);
@@ -161,6 +177,7 @@ export default function SrsScreen() {
   const [revealed, setRevealed] = useState(false);
   const [wasCorrect, setWasCorrect] = useState(false);
   const [nearMiss, setNearMiss] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
   const [reviewed, setReviewed] = useState(0);
   const [cardOpen, setCardOpen] = useState(false);
   // Cards already answered this session, so the user can look back at them.
@@ -240,9 +257,13 @@ export default function SrsScreen() {
   const next = (rating: Rating) => {
     if (!current) return;
     review.mutate({ card: current.card, rating, nearMiss });
-    setHistory((h) => [...h, { card: current, guess: guess.trim(), wasCorrect, nearMiss }]);
+    setHistory((h) => [
+      ...h,
+      { card: current, guess: (picked ?? guess).trim(), wasCorrect, nearMiss },
+    ]);
     setReviewed((n) => n + 1);
     setGuess('');
+    setPicked(null);
     setRevealed(false);
     setNearMiss(false);
     setCardOpen(false);
@@ -290,6 +311,12 @@ export default function SrsScreen() {
   };
 
   /** Drop the restored progress and drill the whole list again. */
+  const pickChoice = (option: string) => {
+    if (revealed || !current) return;
+    setPicked(option);
+    reveal(option.toLowerCase() === answerText(current.word).toLowerCase());
+  };
+
   const startOver = () => {
     clearSession(key);
     setResume(null);
@@ -298,6 +325,7 @@ export default function SrsScreen() {
     setHistory([]);
     resumeSession();
     setGuess('');
+    setPicked(null);
     setRevealed(false);
     setQueue(due.data ?? []);
   };
@@ -353,6 +381,10 @@ export default function SrsScreen() {
 
   const { word } = shown;
   const answer = answerText(word);
+  // Options are drawn once per card; re-rolling them on every keystroke would
+  // move the answer around under the user's finger.
+  const choices = choicesFor(current, answerMode === 'choice' ? allWords.data : undefined);
+  const useChoices = !past && answerMode === 'choice' && choices.length > 1;
   // Synonyms accepted besides the card's own word (e.g. what → cosa, che cosa)
   const otherAccepted = shown.accept.filter((l) => l !== word.lemma);
   const done = reviewed;
@@ -361,7 +393,7 @@ export default function SrsScreen() {
   const showAnswer = past ? pastRevealed : revealed;
   const shownCorrect = past ? past.wasCorrect : wasCorrect;
   const shownNear = past ? past.nearMiss : nearMiss;
-  const shownGuess = past ? past.guess : guess;
+  const shownGuess = past ? past.guess : (picked ?? guess);
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
@@ -454,6 +486,18 @@ export default function SrsScreen() {
                     Answer hidden — try to recall it first.
                   </Text>
                 </View>
+              ) : useChoices ? (
+                <View className="mt-6 w-full gap-2">
+                  {choices.map((option) => (
+                    <Pressable
+                      key={option}
+                      accessibilityLabel={`Answer ${option}`}
+                      onPress={() => pickChoice(option)}
+                      className="items-center rounded-2xl bg-surfaceAlt px-4 py-3.5">
+                      <Text className="text-lg font-semibold text-textHi">{option}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               ) : (
                 <View className="mt-6 w-full flex-row items-center rounded-2xl bg-surfaceAlt px-4">
                   <TextInput
@@ -528,7 +572,9 @@ export default function SrsScreen() {
                   />
                 </View>
                 {!shownCorrect && shownGuess.trim().length > 0 && (
-                  <Text className="mt-1 text-sm text-textLo">you wrote: {shownGuess.trim()}</Text>
+                  <Text className="mt-1 text-sm text-textLo">
+                    you {picked && !past ? 'picked' : 'wrote'}: {shownGuess.trim()}
+                  </Text>
                 )}
                 {/* Other accepted synonyms for this meaning */}
                 {otherAccepted.length > 0 && (
@@ -607,21 +653,31 @@ export default function SrsScreen() {
               </View>
             </View>
           ) : !revealed ? (
-            <View className="flex-row gap-2">
+            useChoices ? (
+              // Picking an option answers the card, so all that's left is a way out
               <Pressable
                 onPress={giveUp}
-                className="items-center justify-center rounded-full bg-surfaceAlt px-5 py-4">
-                <Text className="text-sm font-bold text-textLo">Skip</Text>
+                className="items-center rounded-full bg-surfaceAlt py-4">
+                <Text className="text-sm font-bold text-textLo">Skip — show the answer</Text>
               </Pressable>
-              <Pressable
-                disabled={!guess.trim()}
-                onPress={check}
-                className={`flex-1 items-center rounded-full py-4 ${guess.trim() ? 'bg-primary' : 'bg-surfaceAlt'}`}>
-                <Text className={`text-base font-bold ${guess.trim() ? 'text-white' : 'text-textLo'}`}>
-                  Check
-                </Text>
-              </Pressable>
-            </View>
+            ) : (
+              <View className="flex-row gap-2">
+                <Pressable
+                  onPress={giveUp}
+                  className="items-center justify-center rounded-full bg-surfaceAlt px-5 py-4">
+                  <Text className="text-sm font-bold text-textLo">Skip</Text>
+                </Pressable>
+                <Pressable
+                  disabled={!guess.trim()}
+                  onPress={check}
+                  className={`flex-1 items-center rounded-full py-4 ${guess.trim() ? 'bg-primary' : 'bg-surfaceAlt'}`}>
+                  <Text
+                    className={`text-base font-bold ${guess.trim() ? 'text-white' : 'text-textLo'}`}>
+                    Check
+                  </Text>
+                </Pressable>
+              </View>
+            )
           ) : wasCorrect ? (
             // Correct → schedule further out; let the user say how easy it felt
             <View className="flex-row gap-2">

@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
-import { useTargetLang } from '@/lib/lang';
+import { withArticle } from '@/lib/italian';
+import { hasGrammar, useTargetLang } from '@/lib/lang';
 import { userWordSchema, type UserWord } from '@/lib/schemas';
 import { ensureSession, getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -75,6 +76,50 @@ export interface DueCard {
   word: UserWord;
   /** All acceptable Italian answers for this prompt (synonyms sharing a meaning). */
   accept: string[];
+}
+
+/** What the learner has to produce — nouns are drilled with their article. */
+export function answerText(word: UserWord): string {
+  return hasGrammar(word.target_language) && word.pos === 'noun'
+    ? withArticle(word.lemma, word.gender)
+    : word.lemma;
+}
+
+function shuffled<T>(list: T[]): T[] {
+  const a = list.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * Options for a multiple-choice card: the answer plus distractors taken from
+ * the user's own words — same word class first, so the choice can't be made on
+ * shape alone. Anything the card would accept (synonyms) is excluded, or a
+ * "wrong" option could actually be right.
+ */
+export function buildChoices(card: DueCard, pool: UserWord[], count = 4): string[] {
+  const answer = answerText(card.word);
+  const taken = new Set([answer.toLowerCase(), ...card.accept.map((l) => l.toLowerCase())]);
+  const distractors: string[] = [];
+
+  const consider = (w: UserWord) => {
+    if (distractors.length >= count - 1) return;
+    if (w.id === card.word.id) return;
+    const text = answerText(w);
+    const key = text.toLowerCase();
+    if (taken.has(key) || taken.has(w.lemma.toLowerCase())) return;
+    taken.add(key);
+    distractors.push(text);
+  };
+
+  for (const w of shuffled(pool.filter((w) => w.pos === card.word.pos))) consider(w);
+  for (const w of shuffled(pool.filter((w) => w.pos !== card.word.pos))) consider(w);
+
+  // Fewer than two options isn't a choice — the screen falls back to typing
+  return distractors.length === 0 ? [] : shuffled([answer, ...distractors]);
 }
 
 /** Meaning tokens of an English translation, for synonym matching. */

@@ -9,6 +9,7 @@ import { Container } from '@/components/container';
 import { MAX_W, useResponsive } from '@/hooks/use-responsive';
 import { POS_LABELS, POS_VALUES, type Pos } from '@/lib/italian';
 import { loadSessions, type SavedSession } from '@/lib/practice-session';
+import { setAnswerMode, useAnswerMode } from '@/lib/settings';
 import { setPickedWords } from '@/lib/practice-selection';
 import { TOPIC_ICONS, TOPIC_LABELS, TOPIC_VALUES, type Topic } from '@/lib/topics';
 import { hasGrammar } from '@/lib/lang';
@@ -24,6 +25,7 @@ export default function PracticeScreen() {
   const tough = useToughWords();
   const near = useNearMissWords();
   const { isTablet } = useResponsive();
+  const answerMode = useAnswerMode();
 
   // Drills left half-finished — offer to continue instead of starting over
   const sessions = useQuery({ queryKey: ['practice-session'], queryFn: loadSessions });
@@ -178,6 +180,37 @@ export default function PracticeScreen() {
                 </ScrollView>
               </>
             )}
+
+            {/* How to answer a card */}
+            <Text className="mb-2 text-sm font-semibold text-textLo">Answer with</Text>
+            <View className="mb-4 flex-row gap-2">
+              {(
+                [
+                  { key: 'typing', label: 'Typing', icon: 'create-outline' },
+                  { key: 'choice', label: 'Choices', icon: 'list-outline' },
+                ] as const
+              ).map(({ key, label, icon }) => {
+                const active = answerMode === key;
+                return (
+                  <Pressable
+                    key={key}
+                    accessibilityLabel={`Answer by ${label.toLowerCase()}`}
+                    onPress={() => setAnswerMode(key)}
+                    className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl py-3 ${
+                      active ? 'bg-primary' : 'bg-surface'
+                    }`}>
+                    <Ionicons
+                      name={icon}
+                      size={16}
+                      color={active ? colors.onPrimary : colors.textLo}
+                    />
+                    <Text className={`text-sm font-bold ${active ? 'text-white' : 'text-textLo'}`}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
             {/* Include known toggle */}
             {hasKnown && (

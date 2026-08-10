@@ -8,15 +8,20 @@ import { Platform } from 'react-native';
  */
 const STORAGE_KEY = 'dictinho-settings';
 
+/** How a flashcard is answered. */
+export type AnswerMode = 'typing' | 'choice';
+
 export interface Settings {
   /**
    * Speak the answer by itself when a card is revealed. Off still leaves every
    * speaker button working — it only silences the automatic playback.
    */
   autoSpeak: boolean;
+  /** Type the word, or pick it from four options. */
+  answerMode: AnswerMode;
 }
 
-const DEFAULTS: Settings = { autoSpeak: true };
+const DEFAULTS: Settings = { autoSpeak: true, answerMode: 'typing' };
 
 let state: Settings = { ...DEFAULTS };
 const listeners = new Set<() => void>();
@@ -38,7 +43,11 @@ function hydrate() {
       if (!raw) return;
       try {
         const saved = JSON.parse(raw) as Partial<Settings>;
-        state = { ...state, autoSpeak: saved.autoSpeak ?? state.autoSpeak };
+        state = {
+          ...state,
+          autoSpeak: saved.autoSpeak ?? state.autoSpeak,
+          answerMode: saved.answerMode === 'choice' ? 'choice' : state.answerMode,
+        };
         emit();
       } catch {
         /* ignore a corrupt value */
@@ -53,6 +62,12 @@ function persist() {
 
 export function setAutoSpeak(autoSpeak: boolean) {
   state = { ...state, autoSpeak };
+  emit();
+  persist();
+}
+
+export function setAnswerMode(answerMode: AnswerMode) {
+  state = { ...state, answerMode };
   emit();
   persist();
 }
@@ -73,5 +88,14 @@ export function useAutoSpeak(): boolean {
     subscribe,
     () => state.autoSpeak,
     () => state.autoSpeak,
+  );
+}
+
+export function useAnswerMode(): AnswerMode {
+  hydrate();
+  return useSyncExternalStore(
+    subscribe,
+    () => state.answerMode,
+    () => state.answerMode,
   );
 }

@@ -159,6 +159,14 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   (0017) son cevabı niteliyor (doğru cevapta sıfırlanır); Mistakes listesi artık
   yalnızca gerçek bilinmeyenler, yakın hatalar ayrı "So close" grubunda
   (`mode=near`, `/words?list=near`, `useNearMissWords`)
+- ✅ Cevap şekli seçilebilir (2026-08-10): `settings.answerMode` = 'typing' | 'choice'
+  (varsayılan yazma). Practice ekranında "Answer with: Typing / Choices" ve
+  Settings'te aynı kontrol. Çoktan seçmelide şıklar `buildChoices()` (srs.ts) ile
+  kullanıcının kendi kelimelerinden üretiliyor: önce aynı kelime türünden, kartın
+  kabul ettiği eşanlamlılar hariç (yoksa "yanlış" şık doğru olurdu), 4 şık,
+  karıştırılmış. Şıklar kart başına cache'leniyor (`choiceCache`) — her render'da
+  yeniden üretilse cevap parmağın altında yer değiştirirdi. Havuz yetersizse
+  (tek kelime) otomatik yazmaya düşer. Yakın-hata ("So close") yalnızca yazmada
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için
