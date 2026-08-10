@@ -12,19 +12,20 @@ import { setPickedWords } from '@/lib/practice-selection';
 import { TOPIC_ICONS, TOPIC_LABELS, TOPIC_VALUES, type Topic } from '@/lib/topics';
 import { closeModal } from '@/lib/nav';
 import type { UserWord } from '@/lib/schemas';
-import { useToughWords, useWrongWords } from '@/lib/srs';
+import { useNearMissWords, useToughWords, useWrongWords } from '@/lib/srs';
 import { useRecentWords } from '@/lib/words';
 import { colors } from '@/theme/tokens';
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
 
-type ListKind = 'learning' | 'known' | 'starred' | 'mistakes' | 'tough';
+type ListKind = 'learning' | 'known' | 'starred' | 'mistakes' | 'near' | 'tough';
 
 const META: Record<ListKind, { title: string; practiceMode?: string }> = {
   learning: { title: 'To learn' },
   known: { title: 'Known' },
   starred: { title: 'Starred', practiceMode: 'flagged' },
   mistakes: { title: 'Mistakes', practiceMode: 'wrong' },
+  near: { title: 'So close', practiceMode: 'near' },
   tough: { title: 'Tough words', practiceMode: 'tough' },
 };
 
@@ -37,6 +38,7 @@ export default function WordsScreen() {
   const recent = useRecentWords();
   const wrong = useWrongWords();
   const tough = useToughWords();
+  const near = useNearMissWords();
   const columns = useColumns();
 
   const [q, setQ] = useState('');
@@ -66,12 +68,14 @@ export default function WordsScreen() {
         return all.filter((w) => w.flagged);
       case 'mistakes':
         return wrong.data ?? [];
+      case 'near':
+        return near.data ?? [];
       case 'tough':
         return tough.data ?? [];
       default:
         return all.filter((w) => w.status === 'learning');
     }
-  }, [kind, recent.data, wrong.data, tough.data]);
+  }, [kind, recent.data, wrong.data, near.data, tough.data]);
 
   const availablePos = POS_VALUES.filter((p) => baseWords.some((w) => w.pos === p));
   const activePos = posFilter !== 'all' && !availablePos.includes(posFilter) ? 'all' : posFilter;

@@ -152,6 +152,13 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   Her iki drill'in başlığında hoparlör butonu (anında susuyor, kalıcı),
   Settings sekmesinde "Read answers out loud" satırı. Kapalıyken manuel hoparlör
   butonları çalışmaya devam eder — sadece otomatik okuma susar
+- ✅ "So close" (yakın hata) ayrımı (2026-08-09): `isNearMiss()` (`italian.ts`,
+  kapaklı Levenshtein — 1 harf, 8+ harfli kelimede 2) ile tek harf hatası
+  ayrılıyor: kartta "Not quite" yerine sarı **"So close!"** + "just a letter or
+  two off", buton "Nearly — try it again later". `srs_cards.last_near_miss`
+  (0017) son cevabı niteliyor (doğru cevapta sıfırlanır); Mistakes listesi artık
+  yalnızca gerçek bilinmeyenler, yakın hatalar ayrı "So close" grubunda
+  (`mode=near`, `/words?list=near`, `useNearMissWords`)
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için

@@ -105,6 +105,7 @@ type SrsCardRow = {
   due_at: string;
   last_reviewed: string | null;
   last_rating: number | null;
+  last_near_miss: boolean;
   wrong_count: number;
 };
 

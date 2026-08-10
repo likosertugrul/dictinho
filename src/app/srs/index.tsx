@@ -18,7 +18,7 @@ import { Container } from '@/components/container';
 import { Speaker } from '@/components/speaker';
 import { WordCardModal } from '@/components/word-card-modal';
 import { MAX_W } from '@/hooks/use-responsive';
-import { matchesLemma, withArticle } from '@/lib/italian';
+import { isNearMiss, matchesLemma, withArticle } from '@/lib/italian';
 import { hasGrammar, langInfo, useTargetLang } from '@/lib/lang';
 import { getPickedWords, setPickedWords } from '@/lib/practice-selection';
 import {
@@ -41,7 +41,32 @@ interface AnsweredCard {
   card: DueCard;
   guess: string;
   wasCorrect: boolean;
+  /** Wrong, but only by a letter or two. */
+  nearMiss: boolean;
 }
+
+/** What an empty drill says, per mode. */
+const EMPTY_TITLE: Record<PracticeMode, string> = {
+  due: 'Nothing due right now',
+  flagged: 'No starred words yet',
+  wrong: 'No mistakes to review',
+  near: 'No near misses yet',
+  tough: 'No tough words yet',
+  topics: 'Nothing in these topics',
+  picked: 'No words selected',
+  random: 'No words to shuffle yet',
+};
+
+const EMPTY_HINT: Record<PracticeMode, string> = {
+  due: 'Add words or come back later — cards appear here when they’re due for review.',
+  flagged: 'Star words while practicing or from a word’s page to build a drill list.',
+  wrong: 'Words you answer wrong show up here until you get them right.',
+  near: 'Words you get almost right — off by a letter or two — collect here.',
+  tough: 'Words you keep getting wrong end up here.',
+  topics: 'Those topics have no words to drill yet. Give some words a topic first.',
+  picked: 'The selection is only kept while the app is open — pick the words again from your list.',
+  random: 'Add some words first — a random mix needs something to shuffle.',
+};
 
 /** What the learner should have written — nouns are drilled with their article. */
 function answerText(word: UserWord): string {
@@ -135,6 +160,7 @@ export default function SrsScreen() {
   const [guess, setGuess] = useState('');
   const [revealed, setRevealed] = useState(false);
   const [wasCorrect, setWasCorrect] = useState(false);
+  const [nearMiss, setNearMiss] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   const [cardOpen, setCardOpen] = useState(false);
   // Cards already answered this session, so the user can look back at them.
@@ -194,9 +220,10 @@ export default function SrsScreen() {
     speechService.speak(answerText(card.word), { language: card.word.target_language });
   };
 
-  const reveal = (correct: boolean) => {
+  const reveal = (correct: boolean, close = false) => {
     if (!current) return;
     setWasCorrect(correct);
+    setNearMiss(!correct && close);
     setRevealed(true);
     speakAnswer(current);
   };
@@ -204,18 +231,20 @@ export default function SrsScreen() {
   const check = () => {
     if (!current || !guess.trim()) return;
     // Accept any target word that shares this meaning (what → che/cosa/…)
-    reveal(current.accept.some((lemma) => matchesLemma(guess, lemma)));
+    const correct = current.accept.some((lemma) => matchesLemma(guess, lemma));
+    reveal(correct, !correct && isNearMiss(guess, current.accept));
   };
 
   const giveUp = () => reveal(false);
 
   const next = (rating: Rating) => {
     if (!current) return;
-    review.mutate({ card: current.card, rating });
-    setHistory((h) => [...h, { card: current, guess: guess.trim(), wasCorrect }]);
+    review.mutate({ card: current.card, rating, nearMiss });
+    setHistory((h) => [...h, { card: current, guess: guess.trim(), wasCorrect, nearMiss }]);
     setReviewed((n) => n + 1);
     setGuess('');
     setRevealed(false);
+    setNearMiss(false);
     setCardOpen(false);
     setQueue((q) => {
       const [head, ...rest] = q;
@@ -296,29 +325,11 @@ export default function SrsScreen() {
             <Ionicons name="checkmark-done" size={30} color={colors.pastel.mint} />
           </View>
           <Text className="mt-4 text-center text-xl font-bold text-textHi">
-            {nothingDue
-              ? mode === 'flagged'
-                ? 'No starred words yet'
-                : mode === 'picked'
-                  ? 'No words selected'
-                  : mode === 'topics'
-                    ? 'Nothing in these topics'
-                    : mode === 'random'
-                      ? 'No words to shuffle yet'
-                      : 'Nothing due right now'
-              : 'Session complete!'}
+            {nothingDue ? EMPTY_TITLE[mode] : 'Session complete!'}
           </Text>
           <Text className="mt-2 text-center text-sm text-textLo">
             {nothingDue
-              ? mode === 'flagged'
-                ? 'Star words while practicing or from a word’s page to build a drill list.'
-                : mode === 'picked'
-                  ? 'The selection is only kept while the app is open — pick the words again from your list.'
-                  : mode === 'topics'
-                    ? 'Those topics have no words to drill yet. Give some words a topic first.'
-                    : mode === 'random'
-                      ? 'Add some words first — a random mix needs something to shuffle.'
-                      : 'Add words or come back later — cards appear here when they’re due for review.'
+              ? EMPTY_HINT[mode]
               : `You reviewed ${reviewed} card${reviewed === 1 ? '' : 's'}. Nice work.`}
           </Text>
           <View className="mt-6 flex-row gap-2">
@@ -349,6 +360,7 @@ export default function SrsScreen() {
   // What the card body shows: the live card's own state, or the past result
   const showAnswer = past ? pastRevealed : revealed;
   const shownCorrect = past ? past.wasCorrect : wasCorrect;
+  const shownNear = past ? past.nearMiss : nearMiss;
   const shownGuess = past ? past.guess : guess;
 
   return (
@@ -406,14 +418,36 @@ export default function SrsScreen() {
                 <View className="mt-6 w-full items-center rounded-2xl bg-surfaceAlt px-4 py-5">
                   <View className="flex-row items-center gap-2">
                     <Ionicons
-                      name={past.wasCorrect ? 'checkmark-circle' : 'close-circle'}
+                      name={
+                        past.wasCorrect
+                          ? 'checkmark-circle'
+                          : past.nearMiss
+                            ? 'alert-circle'
+                            : 'close-circle'
+                      }
                       size={18}
-                      color={past.wasCorrect ? colors.pastel.mint : colors.primary}
+                      color={
+                        past.wasCorrect
+                          ? colors.pastel.mint
+                          : past.nearMiss
+                            ? colors.pastel.yellow
+                            : colors.primary
+                      }
                     />
                     <Text
                       className="text-sm font-bold"
-                      style={{ color: past.wasCorrect ? colors.pastel.mint : colors.primary }}>
-                      {past.wasCorrect ? 'You got this one right' : 'You missed this one'}
+                      style={{
+                        color: past.wasCorrect
+                          ? colors.pastel.mint
+                          : past.nearMiss
+                            ? colors.pastel.yellow
+                            : colors.primary,
+                      }}>
+                      {past.wasCorrect
+                        ? 'You got this one right'
+                        : past.nearMiss
+                          ? 'You were close on this one'
+                          : 'You missed this one'}
                     </Text>
                   </View>
                   <Text className="mt-2 text-center text-xs text-textLo">
@@ -446,16 +480,37 @@ export default function SrsScreen() {
                 {/* Result */}
                 <View className="flex-row items-center gap-2">
                   <Ionicons
-                    name={shownCorrect ? 'checkmark-circle' : 'close-circle'}
+                    name={
+                      shownCorrect
+                        ? 'checkmark-circle'
+                        : shownNear
+                          ? 'alert-circle'
+                          : 'close-circle'
+                    }
                     size={22}
-                    color={shownCorrect ? colors.pastel.mint : colors.primary}
+                    color={
+                      shownCorrect
+                        ? colors.pastel.mint
+                        : shownNear
+                          ? colors.pastel.yellow
+                          : colors.primary
+                    }
                   />
                   <Text
                     className="text-lg font-bold"
-                    style={{ color: shownCorrect ? colors.pastel.mint : colors.primary }}>
-                    {shownCorrect ? 'Correct!' : 'Not quite'}
+                    style={{
+                      color: shownCorrect
+                        ? colors.pastel.mint
+                        : shownNear
+                          ? colors.pastel.yellow
+                          : colors.primary,
+                    }}>
+                    {shownCorrect ? 'Correct!' : shownNear ? 'So close!' : 'Not quite'}
                   </Text>
                 </View>
+                {!shownCorrect && shownNear && (
+                  <Text className="mt-1 text-xs text-textLo">just a letter or two off</Text>
+                )}
                 {/* The right answer — tap it to open the full word card */}
                 <View className="mt-3 flex-row items-center gap-2">
                   <Pressable
@@ -586,7 +641,9 @@ export default function SrsScreen() {
             <Pressable
               onPress={() => next('again')}
               className="items-center rounded-full bg-primary py-4">
-              <Text className="text-base font-bold text-white">Got it — continue</Text>
+              <Text className="text-base font-bold text-white">
+                {nearMiss ? 'Nearly — try it again later' : 'Got it — continue'}
+              </Text>
             </Pressable>
           )}
           </Container>

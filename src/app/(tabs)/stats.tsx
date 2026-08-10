@@ -12,7 +12,7 @@ import { loadSessions, type SavedSession } from '@/lib/practice-session';
 import { setPickedWords } from '@/lib/practice-selection';
 import { TOPIC_ICONS, TOPIC_LABELS, TOPIC_VALUES, type Topic } from '@/lib/topics';
 import { hasGrammar } from '@/lib/lang';
-import { useToughWords, useWrongWords } from '@/lib/srs';
+import { useNearMissWords, useToughWords, useWrongWords } from '@/lib/srs';
 import { useRecentWords } from '@/lib/words';
 import { colors } from '@/theme/tokens';
 
@@ -22,6 +22,7 @@ export default function PracticeScreen() {
   const recent = useRecentWords();
   const wrong = useWrongWords();
   const tough = useToughWords();
+  const near = useNearMissWords();
   const { isTablet } = useResponsive();
 
   // Drills left half-finished — offer to continue instead of starting over
@@ -61,6 +62,7 @@ export default function PracticeScreen() {
   const words = recent.data ?? [];
   const starredCount = words.filter((w) => w.flagged).length;
   const mistakesCount = wrong.data?.length ?? 0;
+  const nearCount = near.data?.length ?? 0;
   const toughCount = tough.data?.length ?? 0;
   const hasKnown = words.some((w) => w.status === 'known');
   const articleNouns = words.filter(
@@ -97,6 +99,15 @@ export default function PracticeScreen() {
         subtitle: 'Last answer was wrong',
         count: mistakesCount,
         onPress: () => router.push('/words?list=mistakes'),
+      },
+      {
+        key: 'near',
+        icon: 'ellipse-outline',
+        iconColor: colors.pastel.yellow,
+        title: 'So close',
+        subtitle: 'Off by just a letter or two',
+        count: nearCount,
+        onPress: () => router.push('/words?list=near'),
       },
       {
         key: 'starred',

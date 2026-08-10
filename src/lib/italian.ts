@@ -153,3 +153,37 @@ export function matchesLemma(guess: string, lemma: string): boolean {
   const g = normalizeGuess(guess);
   return g.length > 0 && g === normalizeGuess(lemma);
 }
+
+/** Edit distance, capped: anything past `max` is reported as max + 1. */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + cost);
+      best = Math.min(best, row[j]);
+    }
+    if (best > max) return max + 1; // no later row can come back under the cap
+    prev = row;
+  }
+  return prev[b.length];
+}
+
+/**
+ * A wrong answer that is only a slip: one letter off, or two on a long word.
+ * Accents and articles are already ignored by the normal check, so this is
+ * strictly about typos and near-misses like "formagio" for "formaggio".
+ */
+export function isNearMiss(guess: string, lemmas: string[]): boolean {
+  const g = normalizeGuess(guess);
+  if (g.length < 3) return false; // too short to tell a typo from a wrong word
+  return lemmas.some((lemma) => {
+    const target = normalizeGuess(lemma);
+    if (target.length < 3 || target === g) return false;
+    const allowed = target.length >= 8 ? 2 : 1;
+    return editDistance(g, target, allowed) <= allowed;
+  });
+}

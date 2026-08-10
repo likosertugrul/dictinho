@@ -60,10 +60,12 @@ const cardSchema = z.object({
   due_at: z.string(),
   last_rating: z.number().nullable().default(null),
   wrong_count: z.number().default(0),
+  /** The last wrong answer was only a slip (a letter or two off). */
+  last_near_miss: z.boolean().default(false),
 });
 
 const CARD_COLS =
-  'id, ref_id, ease_factor, interval_days, repetitions, due_at, last_rating, wrong_count';
+  'id, ref_id, ease_factor, interval_days, repetitions, due_at, last_rating, wrong_count, last_near_miss';
 
 /** Words wrong this many times count as "tough". */
 export const TOUGH_THRESHOLD = 3;
@@ -88,7 +90,8 @@ function meaningTokens(translation: string): string[] {
 /**
  * 'due'     → cards scheduled for today
  * 'flagged' → all starred words, anytime
- * 'wrong'   → words whose last answer was wrong (mistakes list), anytime
+ * 'wrong'   → words really missed last time (mistakes list), anytime
+ * 'near'    → words whose last answer was only a letter or two off, anytime
  * 'tough'   → words answered wrong many times (>= TOUGH_THRESHOLD), anytime
  * 'topics'  → every word in the chosen themes, anytime (a topic mix)
  * 'picked'  → exactly the words the user selected, anytime
@@ -101,6 +104,7 @@ export type PracticeMode =
   | 'due'
   | 'flagged'
   | 'wrong'
+  | 'near'
   | 'tough'
   | 'topics'
   | 'picked'
@@ -168,7 +172,8 @@ export function useDueCards({
       // the device can't make a freshly-added word look "not yet due".
       // 'wrong' never needs new cards (a word with no card can't be a mistake).
       const haveRef = new Set(cards.map((c) => c.ref_id));
-      const missing = mode === 'wrong' ? [] : words.filter((w) => !haveRef.has(w.id));
+      const missing =
+        mode === 'wrong' || mode === 'near' ? [] : words.filter((w) => !haveRef.has(w.id));
       if (missing.length > 0) {
         const dueNow = new Date(Date.now() - 60_000).toISOString();
         const { data: inserted, error: insErr } = await supabase
@@ -214,7 +219,10 @@ export function useDueCards({
         // Hand-picked words come through exactly as chosen
         if (mode === 'picked') return idSet.has(w.id);
         if (mode === 'tough') return c.wrong_count >= TOUGH_THRESHOLD;
-        if (mode === 'wrong') return c.last_rating != null && c.last_rating < 3;
+        // Slips get their own list, so Mistakes stays "words I didn't know"
+        if (mode === 'near') return c.last_rating != null && c.last_rating < 3 && c.last_near_miss;
+        if (mode === 'wrong')
+          return c.last_rating != null && c.last_rating < 3 && !c.last_near_miss;
         if (mode === 'flagged') return w.flagged;
         // No topic, no schedule — just everything worth drilling
         if (mode === 'random') return includeKnown || w.status !== 'known';
@@ -250,7 +258,16 @@ export function useDueCards({
 export function useReviewCard() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ card, rating }: { card: DueCard['card']; rating: Rating }) => {
+    mutationFn: async ({
+      card,
+      rating,
+      nearMiss = false,
+    }: {
+      card: DueCard['card'];
+      rating: Rating;
+      /** The wrong answer was only a slip — kept off the Mistakes list. */
+      nearMiss?: boolean;
+    }) => {
       const supabase = getSupabase();
       const quality = RATINGS[rating];
       const next = sm2(card, quality);
@@ -265,6 +282,8 @@ export function useReviewCard() {
           due_at: dueAt,
           last_reviewed: new Date().toISOString(),
           last_rating: quality,
+          // Always written: answering correctly clears a previous slip
+          last_near_miss: quality < 3 && nearMiss,
           wrong_count: card.wrong_count + (quality < 3 ? 1 : 0),
         })
         .eq('id', card.id);
@@ -276,14 +295,21 @@ export function useReviewCard() {
   });
 }
 
-async function fetchCardWords(target: string, kind: 'wrong' | 'tough'): Promise<UserWord[]> {
+async function fetchCardWords(
+  target: string,
+  kind: 'wrong' | 'tough' | 'near',
+): Promise<UserWord[]> {
   const supabase = getSupabase();
   const { data: s } = await supabase.auth.getSession();
   if (!s.session) return [];
 
   const base = supabase.from('srs_cards').select('ref_id, last_reviewed').eq('card_type', 'word');
   const { data: cards, error } =
-    kind === 'tough' ? await base.gte('wrong_count', TOUGH_THRESHOLD) : await base.lt('last_rating', 3);
+    kind === 'tough'
+      ? await base.gte('wrong_count', TOUGH_THRESHOLD)
+      : kind === 'near'
+        ? await base.lt('last_rating', 3).eq('last_near_miss', true)
+        : await base.lt('last_rating', 3).eq('last_near_miss', false);
   if (error) throw new Error(error.message);
   const rows = (cards ?? []) as { ref_id: string; last_reviewed: string | null }[];
   if (rows.length === 0) return [];
@@ -302,13 +328,23 @@ async function fetchCardWords(target: string, kind: 'wrong' | 'tough'): Promise<
   return words.sort((a, b) => (reviewedAt.get(b.id) ?? '').localeCompare(reviewedAt.get(a.id) ?? ''));
 }
 
-/** Words whose last review was wrong (rating < 3) — the mistakes list. */
+/** Words really missed last time (slips excluded) — the mistakes list. */
 export function useWrongWords() {
   const target = useTargetLang();
   return useQuery({
     queryKey: ['srs', 'wrong-list', target],
     enabled: isSupabaseConfigured,
     queryFn: () => fetchCardWords(target, 'wrong'),
+  });
+}
+
+/** Words whose last answer was only a letter or two off — the "almost" list. */
+export function useNearMissWords() {
+  const target = useTargetLang();
+  return useQuery({
+    queryKey: ['srs', 'near-list', target],
+    enabled: isSupabaseConfigured,
+    queryFn: () => fetchCardWords(target, 'near'),
   });
 }
 
