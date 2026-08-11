@@ -167,6 +167,14 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   karıştırılmış. Şıklar kart başına cache'leniyor (`choiceCache`) — her render'da
   yeniden üretilse cevap parmağın altında yer değiştirirdi. Havuz yetersizse
   (tek kelime) otomatik yazmaya düşer. Yakın-hata ("So close") yalnızca yazmada
+- ✅ Deploy (Vercel, proje `dictinho`, canlı: https://dictinho.vercel.app):
+  `vercel.json` → build `expo export -p web`, output `dist`, SPA rewrite.
+  Build-time env: `EXPO_PUBLIC_SUPABASE_URL` + `_ANON_KEY` (Production'da tanımlı).
+  2026-08-11'e kadar proje GitHub'a BAĞLI DEĞİLDİ — push deploy tetiklemiyordu,
+  bu yüzden canlı site 13 gün eskiydi. `vercel git connect` ile bağlandı;
+  artık main'e her push otomatik production deploy'u tetikliyor
+  (doğrulama: push → `● Ready`, alias `dictinho.vercel.app` yeni deployment'ta).
+  Elle deploy gerekirse: `vercel --prod --yes`
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için
