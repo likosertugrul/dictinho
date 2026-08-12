@@ -174,7 +174,12 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   bu yüzden canlı site 13 gün eskiydi. `vercel git connect` ile bağlandı;
   artık main'e her push otomatik production deploy'u tetikliyor
   (doğrulama: push → `● Ready`, alias `dictinho.vercel.app` yeni deployment'ta).
-  Elle deploy gerekirse: `vercel --prod --yes`
+  AMA otomatik tetikleme her seferinde çalışmadı (3 push'un 2'sinde tetiklendi,
+  birinde hiç deployment oluşmadı — sebebi dışarıdan teşhis edilemedi, `gh` yok).
+  Bu yüzden push sonrası CANLI BUNDLE HASH'İNİ doğrula:
+  `npx expo export -p web` çıktısındaki `entry-*.js` ile
+  `curl -s https://dictinho.vercel.app | grep -o 'entry-[a-f0-9]*\.js'` aynı olmalı.
+  Değilse `npm run deploy` (build + `vercel --prod --yes`)
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için
