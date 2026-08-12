@@ -180,6 +180,15 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   `npx expo export -p web` çıktısındaki `entry-*.js` ile
   `curl -s https://dictinho.vercel.app | grep -o 'entry-[a-f0-9]*\.js'` aynı olmalı.
   Değilse `npm run deploy` (build + `vercel --prod --yes`)
+- ✅ Çekimli form araması (2026-08-12): "vado" araması `andare`'yi hiç bulmuyordu,
+  kullanıcı da çekimli formu kelime diye kaydediyordu. `search_lexicon` artık
+  `conjugations` tablosunu da tarıyor (yalnızca TAM eşleşme; 7k form üzerinde
+  fuzzy arama lemma sonuçlarını boğardı) ve `matched_form` döndürüyor (0018).
+  Add ekranında: kesin eşleşmede "«vado» is a form of andare" şeridi + "Use it",
+  ve `hasExactMatch` true olduğu için "kendin ekle/AI ile ekle" bloğu gizleniyor.
+  İsim/sıfat çekimleri DB'de olmadığından orada `isNearMiss` ile yumuşak
+  "Did you mean finestra?" ipucu var (yönlendirme değil, öneri).
+  AI yolu zaten sözlük formuna çeviriyor (vado→andare, rosse→rosso, scritto→scrivere)
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için

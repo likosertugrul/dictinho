@@ -24,6 +24,7 @@ import { hasGrammar, langInfo, useSourceLang, useTargetLang } from '@/lib/lang';
 import { closeModal } from '@/lib/nav';
 import {
   AUXILIARIES,
+  isNearMiss,
   matchesLemma,
   PERSON_LABELS,
   PERSONS,
@@ -157,7 +158,21 @@ export default function AddWordScreen() {
 
   // Fuzzy search returns near-matches ("laurea" → là, lago…), so "no results"
   // rarely fires. Offer AI-add / manual entry whenever nothing EXACTLY matches.
-  const hasExactMatch = suggestions.some((s) => matchesLemma(query, s.lemma));
+  // Typing an inflected form counts as a match: "vado" is andare, and saving it
+  // as its own word is exactly the mistake this avoids.
+  const inflectedHit = suggestions.find(
+    (s) => s.matched_form && matchesLemma(query, s.matched_form),
+  );
+  const hasExactMatch =
+    suggestions.some((s) => matchesLemma(query, s.lemma)) || inflectedHit != null;
+
+  // Noun and adjective inflections aren't in the database the way conjugations
+  // are, so "finestre" can only be guessed at: a dictionary word one or two
+  // letters away is probably what the user meant. A hint, not a redirect.
+  const didYouMean =
+    !selected && !hasExactMatch
+      ? suggestions.find((s) => isNearMiss(query, [s.lemma]))
+      : undefined;
   const canAddCustom =
     !selected && searchLang === 'it' && query.trim().length >= 2 && !hasExactMatch;
   const isCustom = canAddCustom; // manual attribute pickers gate on the same flag
@@ -411,6 +426,24 @@ export default function AddWordScreen() {
             </View>
           )}
 
+          {/* Typed a conjugated form — point at the word it belongs to */}
+          {!selected && inflectedHit && (
+            <Pressable
+              accessibilityLabel={`Add ${inflectedHit.lemma} instead`}
+              onPress={() => pick(inflectedHit)}
+              className="mt-3 flex-row items-center gap-2 rounded-2xl border border-primary bg-surface px-3 py-2.5">
+              <Ionicons name="git-branch-outline" size={16} color={colors.primary} />
+              <Text className="flex-1 text-xs text-textHi">
+                “{inflectedHit.matched_form}” is a form of{' '}
+                <Text className="font-bold">{inflectedHit.lemma}</Text> — words are saved in
+                their dictionary form.
+              </Text>
+              <View className="rounded-full bg-primary px-3 py-1.5">
+                <Text className="text-xs font-bold text-white">Use it</Text>
+              </View>
+            </Pressable>
+          )}
+
           {showSuggestions && (
             <View className="mt-2 overflow-hidden rounded-2xl bg-surface">
               {suggestions.map((s, i) => (
@@ -426,6 +459,11 @@ export default function AddWordScreen() {
                     </Text>
                     {s.translation ? (
                       <Text className="mt-0.5 text-xs text-textLo">{s.translation}</Text>
+                    ) : null}
+                    {s.matched_form ? (
+                      <Text className="mt-0.5 text-[11px] text-textLo">
+                        form: {s.matched_form}
+                      </Text>
                     ) : null}
                     {ownedStatus(s.lemma, s.pos) && (
                       <View className="mt-1 flex-row items-center gap-1">
@@ -542,6 +580,22 @@ export default function AddWordScreen() {
           {/* Manual attributes — shown when the typed word isn't an exact match */}
           {isCustom && (
             <>
+              {didYouMean && !search.isFetching && (
+                <Pressable
+                  accessibilityLabel={`Add ${didYouMean.lemma} instead`}
+                  onPress={() => pick(didYouMean)}
+                  className="mt-4 flex-row items-center gap-2 rounded-2xl bg-surface px-3 py-2.5">
+                  <Ionicons name="help-circle-outline" size={16} color={colors.pastel.yellow} />
+                  <Text className="flex-1 text-xs text-textHi">
+                    Did you mean <Text className="font-bold">{didYouMean.lemma}</Text>? Words are
+                    saved in their dictionary form.
+                  </Text>
+                  <View className="rounded-full bg-surfaceAlt px-3 py-1.5">
+                    <Text className="text-xs font-bold text-textHi">Use it</Text>
+                  </View>
+                </Pressable>
+              )}
+
               {!search.isFetching && (
                 <>
                   {suggestions.length > 0 && (

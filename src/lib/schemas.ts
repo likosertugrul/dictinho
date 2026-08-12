@@ -20,6 +20,11 @@ export const lexiconSuggestionSchema = z.object({
   cefr: cefrSchema.nullable(),
   // Theme bucket (food, travel…) — null on entries added before topics existed
   topic: topicSchema.nullable().catch(null).default(null),
+  /**
+   * Set when the search matched an inflected form rather than the headword:
+   * typing "vado" returns `andare` with matched_form "vado".
+   */
+  matched_form: z.string().nullable().default(null),
   translation: z.string().nullable(),
 });
 export type LexiconSuggestion = z.infer<typeof lexiconSuggestionSchema>;

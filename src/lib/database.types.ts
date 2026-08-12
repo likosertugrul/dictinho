@@ -163,6 +163,7 @@ export type Database = {
           auxiliary: string | null;
           cefr: string | null;
           topic: string | null;
+          matched_form: string | null;
           translation: string | null;
         }[];
       };
