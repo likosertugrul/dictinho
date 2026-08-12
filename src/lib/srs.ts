@@ -140,7 +140,7 @@ function meaningTokens(translation: string): string[] {
  * 'tough'   → words answered wrong many times (>= TOUGH_THRESHOLD), anytime
  * 'topics'  → every word in the chosen themes, anytime (a topic mix)
  * 'picked'  → exactly the words the user selected, anytime
- * 'random'  → everything you're still learning, shuffled, anytime
+ * 'random'  → everything you're still learning, schedule ignored
  *
  * The last two ignore the schedule on purpose: the user asked for those words,
  * so handing them "nothing due" would be useless.
@@ -280,16 +280,15 @@ export function useDueCards({
         if (!includeKnown && w.status === 'known') return false;
         return new Date(c.due_at).getTime() <= now;
       };
+      // Shuffled, never in due_at order: cards added together share a due date,
+      // so sorting by it just replayed the order the words were added in, and
+      // the answer started coming from remembering the sequence. The drill
+      // screen builds its queue once and stores it, so a session that is
+      // resumed keeps the run it started with.
       const scoped = cards.filter(inScope);
-      // A random mix is shuffled once here; the session then persists that
-      // order, so continuing it later keeps the same run of cards.
-      if (mode === 'random') {
-        for (let i = scoped.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [scoped[i], scoped[j]] = [scoped[j], scoped[i]];
-        }
-      } else {
-        scoped.sort((a, b) => a.due_at.localeCompare(b.due_at));
+      for (let i = scoped.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [scoped[i], scoped[j]] = [scoped[j], scoped[i]];
       }
       return scoped
         .map((card) => {
