@@ -10,7 +10,16 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+// Groq retires models with little notice — llama-3.3-70b-versatile vanished in
+// August 2026 and took every AI look-up with it (the app just showed a generic
+// "non-2xx" error). Try the names in order and skip one that no longer exists,
+// so the next retirement costs a wasted request instead of the whole feature.
+const GROQ_MODELS = [
+  Deno.env.get('GROQ_MODEL'),
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+  'llama-3.1-8b-instant',
+].filter((m): m is string => Boolean(m));
 const TENSES = [
   'presente',
   'passato_prossimo',
@@ -39,14 +48,17 @@ const normalize = (s: string) =>
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function groqJson(
+class GroqError extends Error {
+  constructor(message: string, readonly missingModel: boolean) {
+    super(message);
+  }
+}
+
+async function groqCall(
+  model: string,
   messages: unknown[],
   attempt = 1,
-  preferModel?: string,
 ): Promise<Record<string, unknown>> {
-  // Fall back to the smaller/faster model on later attempts if the big one is
-  // rate-limited (concurrent bulk jobs can saturate the free tier).
-  const model = preferModel ?? (attempt >= 3 ? 'llama-3.1-8b-instant' : GROQ_MODEL);
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -63,11 +75,63 @@ async function groqJson(
   if (res.status === 429 && attempt <= 4) {
     const wait = Math.min(Number(res.headers.get('retry-after') ?? 3), 8) * 1000;
     await sleep(wait);
-    return groqJson(messages, attempt + 1, preferModel);
+    return groqCall(model, messages, attempt + 1);
   }
-  if (!res.ok) throw new Error(`groq ${res.status}: ${(await res.text()).slice(0, 160)}`);
+  if (!res.ok) {
+    const body = (await res.text()).slice(0, 200);
+    const gone = res.status === 404 || /model_not_found|decommissioned|does not exist/i.test(body);
+    throw new GroqError(`groq ${res.status} (${model}): ${body}`, gone);
+  }
   const data = await res.json();
   return JSON.parse(data.choices[0].message.content);
+}
+
+/**
+ * Ask Groq for JSON, walking the model chain. `preferModel` puts one name at the
+ * front (the grammar prompts want the strongest one); every other failure than a
+ * retired model propagates, so a real error still surfaces to the caller.
+ */
+async function groqJson(
+  messages: unknown[],
+  preferModel?: string,
+): Promise<Record<string, unknown>> {
+  const chain = preferModel
+    ? [preferModel, ...GROQ_MODELS.filter((m) => m !== preferModel)]
+    : GROQ_MODELS;
+  let last: unknown = new Error('no groq model configured');
+  for (const model of chain) {
+    try {
+      return await groqCall(model, messages);
+    } catch (e) {
+      last = e;
+      if (!(e instanceof GroqError && e.missingModel)) throw e;
+    }
+  }
+  throw last;
+}
+
+// Words that legitimately stand apart in a conjugated form: reflexive clitics
+// and the two auxiliaries. Anything else separated by a space is the model
+// having split one word ("russ erò").
+const CLITICS = new Set(['mi', 'ti', 'si', 'ci', 'vi']);
+const AUX_FORMS = new Set([
+  'ho', 'hai', 'ha', 'abbiamo', 'avete', 'hanno',
+  'sono', 'sei', 'è', 'siamo', 'siete',
+]);
+
+/**
+ * Clean one generated verb form. gpt-oss emphasises endings in capitals
+ * ("russO") and sometimes splits a word before its ending ("russ erò"), both of
+ * which would go straight into the conjugation table the learner reads.
+ * Leading clitics/auxiliaries keep their space ("mi lavo", "ho russato").
+ */
+function tidyForm(raw: string): string {
+  const parts = raw.trim().toLowerCase().split(/\s+/);
+  const lead: string[] = [];
+  while (parts.length > 1 && (CLITICS.has(parts[0]) || AUX_FORMS.has(parts[0]))) {
+    lead.push(parts.shift()!);
+  }
+  return [...lead, parts.join('')].join(' ').trim();
 }
 
 async function conjugateTables(lemma: string, aux: string): Promise<Record<string, Record<string, string>>> {
@@ -86,9 +150,9 @@ async function conjugateTables(lemma: string, aux: string): Promise<Record<strin
     },
   ];
   // Prefer a stronger model for accuracy; validate completeness with retries.
-  for (const model of ['openai/gpt-oss-120b', GROQ_MODEL, GROQ_MODEL]) {
+  for (const model of [GROQ_MODELS[0], GROQ_MODELS[0], GROQ_MODELS[1] ?? GROQ_MODELS[0]]) {
     try {
-      const out = await groqJson(messages, 1, model);
+      const out = await groqJson(messages, model);
       const tenses = (out.tenses ?? {}) as Record<string, Record<string, string>>;
       if (TENSES.every((t) => PERSONS.every((p) => tenses[t]?.[p]?.trim()))) return tenses;
     } catch (_) {
@@ -125,9 +189,9 @@ async function inflectForms(
     },
   ];
   const keys = isNoun ? ['singular', 'plural'] : ['m_sg', 'f_sg', 'm_pl', 'f_pl'];
-  for (const model of ['openai/gpt-oss-120b', GROQ_MODEL, GROQ_MODEL]) {
+  for (const model of [GROQ_MODELS[0], GROQ_MODELS[0], GROQ_MODELS[1] ?? GROQ_MODELS[0]]) {
     try {
-      const out = await groqJson(messages, 1, model);
+      const out = await groqJson(messages, model);
       if (keys.every((k) => typeof out[k] === 'string' && (out[k] as string).trim())) {
         return Object.fromEntries(keys.map((k) => [k, String(out[k]).trim().toLowerCase()]));
       }
@@ -168,7 +232,7 @@ async function ensureConjugations(
           tense: t,
           mood: 'indicativo',
           person: p,
-          form: tenses[t][p].trim(),
+          form: tidyForm(tenses[t][p]),
           is_compound: COMPOUND.has(t),
           source: 'ai',
         })),

@@ -72,6 +72,66 @@ function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 
   );
 }
 
+/**
+ * One destination in the quick-add tray. The list a word lands in is colour-coded
+ * the way the rest of the app already codes it: coral for the practice queue,
+ * mint for Known. The list the word is already in is shown as a state, not a
+ * button, so the only tappable pill is the one that changes something.
+ */
+function QuickAddPill({
+  label,
+  tone,
+  current,
+  busy,
+  disabled,
+  accessibilityLabel,
+  onPress,
+}: {
+  label: string;
+  tone: 'primary' | 'mint';
+  current: boolean;
+  busy: boolean;
+  disabled: boolean;
+  accessibilityLabel: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: current || disabled, busy }}
+      disabled={current || disabled}
+      onPress={onPress}
+      className={`h-9 flex-1 flex-row items-center justify-center gap-1.5 rounded-full ${
+        current
+          ? 'border border-border bg-surface'
+          : tone === 'mint'
+            ? 'bg-pastel-mint'
+            : 'bg-primary'
+      } ${disabled && !current ? 'opacity-50' : ''}`}>
+      {busy ? (
+        <ActivityIndicator size="small" color={tone === 'mint' ? colors.onPastel : colors.onPrimary} />
+      ) : (
+        <>
+          {current && (
+            <Ionicons name="checkmark-circle" size={14} color={colors.pastel.mint} />
+          )}
+          <Text
+            className="text-xs font-bold"
+            style={{
+              color: current
+                ? colors.textLo
+                : tone === 'mint'
+                  ? colors.onPastel
+                  : colors.onPrimary,
+            }}>
+            {current ? `In ${label}` : label}
+          </Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
 function PreviewRow({ label, value, border }: { label: string; value: string; border?: boolean }) {
   return (
     <View
@@ -102,6 +162,12 @@ export default function AddWordScreen() {
 
   // Which list to file it under
   const [status, setStatus] = useState<WordStatus>('learning');
+
+  // Quick add — save a search result straight to a list without opening the
+  // form below. Holds the suggestion id whose destination tray is open.
+  const [quickFor, setQuickFor] = useState<string | null>(null);
+  const [quickBusy, setQuickBusy] = useState<WordStatus | null>(null);
+  const [quickError, setQuickError] = useState<string | null>(null);
 
   // Manual attributes — used when the word isn't in the base lexicon
   const [manualPos, setManualPos] = useState<Pos>('noun');
@@ -208,6 +274,37 @@ export default function AddWordScreen() {
         },
       },
     );
+  };
+
+  /**
+   * Save a dictionary hit with one tap. Everything the form would auto-fill is
+   * already on the suggestion row, so the only decision left is the list — and
+   * re-adding an owned word moves it there (useAddWord upserts on lemma+pos).
+   * Verbs get Presente; more tenses are a job for the word card.
+   */
+  const quickAdd = async (s: LexiconSuggestion, next: WordStatus) => {
+    setQuickBusy(next);
+    setQuickError(null);
+    try {
+      await addWord.mutateAsync({
+        lemma: s.lemma,
+        translation: (s.translation ?? '').trim(),
+        pos: s.pos,
+        gender: s.gender,
+        auxiliary: s.auxiliary,
+        cefr: s.cefr,
+        topic: s.topic,
+        lexicon_ref: s.id,
+        notes: null,
+        status: next,
+        tenses: s.pos === 'verb' && grammar ? ['presente'] : [],
+      });
+      setQuickFor(null);
+    } catch (e) {
+      setQuickError(e instanceof Error ? e.message : 'Could not save that word.');
+    } finally {
+      setQuickBusy(null);
+    }
   };
 
   const reset = () => {
@@ -446,43 +543,109 @@ export default function AddWordScreen() {
 
           {showSuggestions && (
             <View className="mt-2 overflow-hidden rounded-2xl bg-surface">
-              {suggestions.map((s, i) => (
-                <Pressable
-                  key={s.id}
-                  onPress={() => pick(s)}
-                  className={`flex-row items-center justify-between px-4 py-3 ${
-                    i > 0 ? 'border-t border-border' : ''
-                  }`}>
-                  <View className="flex-1 pr-3">
-                    <Text className="text-base font-semibold text-textHi">
-                      {s.pos === 'noun' ? withArticle(s.lemma, s.gender) : s.lemma}
-                    </Text>
-                    {s.translation ? (
-                      <Text className="mt-0.5 text-xs text-textLo">{s.translation}</Text>
-                    ) : null}
-                    {s.matched_form ? (
-                      <Text className="mt-0.5 text-[11px] text-textLo">
-                        form: {s.matched_form}
-                      </Text>
-                    ) : null}
-                    {ownedStatus(s.lemma, s.pos) && (
-                      <View className="mt-1 flex-row items-center gap-1">
-                        <Ionicons name="checkmark-circle" size={12} color={colors.pastel.mint} />
-                        <Text className="text-[11px] font-semibold" style={{ color: colors.pastel.mint }}>
-                          In your {ownedStatus(s.lemma, s.pos) === 'known' ? 'Known' : 'To learn'} list
+              {suggestions.map((s, i) => {
+                const owned = ownedStatus(s.lemma, s.pos);
+                const trayOpen = quickFor === s.id;
+                // A word can't be saved without a meaning, so a translation-less
+                // entry keeps the row-tap route into the form instead.
+                const canQuickAdd = Boolean(s.translation?.trim());
+                return (
+                  <View key={s.id} className={i > 0 ? 'border-t border-border' : ''}>
+                    <Pressable
+                      onPress={() => pick(s)}
+                      className="flex-row items-center justify-between px-4 py-3">
+                      <View className="flex-1 pr-3">
+                        <Text className="text-base font-semibold text-textHi">
+                          {s.pos === 'noun' ? withArticle(s.lemma, s.gender) : s.lemma}
                         </Text>
+                        {s.translation ? (
+                          <Text className="mt-0.5 text-xs text-textLo">{s.translation}</Text>
+                        ) : null}
+                        {s.matched_form ? (
+                          <Text className="mt-0.5 text-[11px] text-textLo">
+                            form: {s.matched_form}
+                          </Text>
+                        ) : null}
+                        {owned && (
+                          <View className="mt-1 flex-row items-center gap-1">
+                            <Ionicons name="checkmark-circle" size={12} color={colors.pastel.mint} />
+                            <Text className="text-[11px] font-semibold" style={{ color: colors.pastel.mint }}>
+                              In your {owned === 'known' ? 'Known' : 'To learn'} list
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View className="flex-row items-center gap-1.5">
+                        <Speaker text={s.pos === 'noun' ? withArticle(s.lemma, s.gender) : s.lemma} lang={targetLang} />
+                        <Badge label={s.pos} />
+                        {s.auxiliary ? <Badge label={s.auxiliary} tone="primary" /> : null}
+                        {s.gender ? <Badge label={s.gender} /> : null}
+                        {s.cefr ? <Badge label={s.cefr} /> : null}
+                      </View>
+                      {canQuickAdd && (
+                        <Pressable
+                          accessibilityLabel={
+                            owned
+                              ? `Move ${s.lemma} to another list`
+                              : `Add ${s.lemma} to a list`
+                          }
+                          hitSlop={6}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            setQuickError(null);
+                            setQuickFor(trayOpen ? null : s.id);
+                          }}
+                          className={`ml-2 h-9 w-9 items-center justify-center rounded-full ${
+                            trayOpen ? 'bg-primary' : 'bg-surfaceAlt'
+                          }`}>
+                          <Ionicons
+                            name={trayOpen ? 'close' : owned ? 'swap-horizontal' : 'add'}
+                            size={18}
+                            color={trayOpen ? colors.onPrimary : colors.primary}
+                          />
+                        </Pressable>
+                      )}
+                    </Pressable>
+
+                    {/* Pick the list and it's saved — no trip through the form */}
+                    {trayOpen && canQuickAdd && (
+                      <View className="gap-2 border-t border-border bg-surfaceAlt px-4 py-3">
+                        <Text className="text-xs font-semibold text-textLo">
+                          {owned ? 'Move to' : 'Save to'}
+                        </Text>
+                        <View className="flex-row gap-2">
+                          <QuickAddPill
+                            label="To learn"
+                            tone="primary"
+                            current={owned === 'learning'}
+                            busy={quickBusy === 'learning'}
+                            disabled={quickBusy != null}
+                            accessibilityLabel={`Save ${s.lemma} to the To learn list`}
+                            onPress={() => quickAdd(s, 'learning')}
+                          />
+                          <QuickAddPill
+                            label="Known"
+                            tone="mint"
+                            current={owned === 'known'}
+                            busy={quickBusy === 'known'}
+                            disabled={quickBusy != null}
+                            accessibilityLabel={`Save ${s.lemma} to the Known list`}
+                            onPress={() => quickAdd(s, 'known')}
+                          />
+                        </View>
+                        {s.pos === 'verb' && grammar && (
+                          <Text className="text-[11px] text-textLo">
+                            Saved with Presente — add more tenses on the word card.
+                          </Text>
+                        )}
+                        {quickError && (
+                          <Text className="text-xs text-primary">{quickError}</Text>
+                        )}
                       </View>
                     )}
                   </View>
-                  <View className="flex-row items-center gap-1.5">
-                    <Speaker text={s.pos === 'noun' ? withArticle(s.lemma, s.gender) : s.lemma} lang={targetLang} />
-                    <Badge label={s.pos} />
-                    {s.auxiliary ? <Badge label={s.auxiliary} tone="primary" /> : null}
-                    {s.gender ? <Badge label={s.gender} /> : null}
-                    {s.cefr ? <Badge label={s.cefr} /> : null}
-                  </View>
-                </Pressable>
-              ))}
+                );
+              })}
             </View>
           )}
 

@@ -38,17 +38,21 @@ export function useEnrichWord() {
           : { lemma: term.trim(), target, source, kind };
       const { data, error } = await getSupabase().functions.invoke('enrich-word', { body });
       if (error) {
+        // The reason lives in the response body, not in error.message ("non-2xx
+        // status code"). Read it out first — throwing from inside the try would
+        // be swallowed by its own catch, which is how a dead Groq model showed
+        // up as a blank generic failure.
         const detail = (error as { context?: Response }).context;
+        let reason: string | null = null;
         if (detail) {
           try {
             const j = await detail.json();
-            if (j?.error === 'not_a_word') throw new Error(notFound);
-            if (j?.error) throw new Error(j.error);
+            if (typeof j?.error === 'string') reason = j.error;
           } catch {
-            /* fall through */
+            /* no JSON body — keep the generic message */
           }
         }
-        throw new Error(error.message);
+        throw new Error(reason === 'not_a_word' ? notFound : (reason ?? error.message));
       }
       if (data?.error) {
         throw new Error(data.error === 'not_a_word' ? notFound : data.error);

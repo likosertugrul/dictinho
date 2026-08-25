@@ -42,7 +42,9 @@ const rest = (path, init = {}) =>
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function groqJson(messages, attempt = 1) {
-  const model = attempt >= 3 ? 'llama-3.1-8b-instant' : 'llama-3.3-70b-versatile';
+  // llama-3.3-70b-versatile was retired by Groq in August 2026
+  const model =
+    process.env.GROQ_MODEL || (attempt >= 3 ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-120b');
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { authorization: `Bearer ${GROQ_KEY}`, 'content-type': 'application/json' },

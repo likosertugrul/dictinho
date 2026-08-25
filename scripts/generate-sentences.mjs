@@ -25,7 +25,8 @@ if (!url || !serviceKey || !GROQ_API_KEY) {
   process.exit(1);
 }
 const supabase = createClient(url, serviceKey);
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+// llama-3.3-70b-versatile was retired by Groq in August 2026
+const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 const BATCH_SIZE = 8;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

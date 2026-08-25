@@ -23,7 +23,8 @@ loadEnv(resolve(process.cwd(), '.env'));
 const { EXPO_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: serviceKey } = process.env;
 // Provider: Groq (free tier) when GROQ_API_KEY is set, else Anthropic
 const USE_GROQ = Boolean(process.env.GROQ_API_KEY);
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+// llama-3.3-70b-versatile was retired by Groq in August 2026
+const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 if (!url || !serviceKey || (!USE_GROQ && !process.env.ANTHROPIC_API_KEY)) {
   console.error('Missing env — need Supabase vars plus GROQ_API_KEY or ANTHROPIC_API_KEY');
   process.exit(1);
