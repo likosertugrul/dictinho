@@ -9,7 +9,7 @@ import { Platform } from 'react-native';
 const STORAGE_KEY = 'dictinho-settings';
 
 /** How a flashcard is answered. */
-export type AnswerMode = 'typing' | 'choice';
+export type AnswerMode = 'typing' | 'choice' | 'handwriting';
 
 export interface Settings {
   /**
@@ -17,7 +17,7 @@ export interface Settings {
    * speaker button working — it only silences the automatic playback.
    */
   autoSpeak: boolean;
-  /** Type the word, or pick it from four options. */
+  /** Type the word, pick it from four options, or write it with a stylus. */
   answerMode: AnswerMode;
 }
 
@@ -46,7 +46,10 @@ function hydrate() {
         state = {
           ...state,
           autoSpeak: saved.autoSpeak ?? state.autoSpeak,
-          answerMode: saved.answerMode === 'choice' ? 'choice' : state.answerMode,
+          answerMode:
+            saved.answerMode === 'choice' || saved.answerMode === 'handwriting'
+              ? saved.answerMode
+              : state.answerMode,
         };
         emit();
       } catch {

@@ -13,6 +13,7 @@ import {
 
 import { ArticleInfo } from '@/components/article-info';
 import { Container } from '@/components/container';
+import { WordInk } from '@/components/ink/word-ink';
 import { Speaker } from '@/components/speaker';
 import { MAX_W } from '@/hooks/use-responsive';
 import { adjectiveForms } from '@/lib/inflect';
@@ -156,6 +157,9 @@ export function WordDetail({
   }, [word.data]);
   const notesDirty = word.data != null && notesDraft !== (word.data.notes ?? '');
 
+  // A stylus drawing across the pad must not scroll the card underneath it.
+  const [penDown, setPenDown] = useState(false);
+
   const forms = useMemo(() => {
     const map = {} as Record<Person, string>;
     for (const c of conjugations.data ?? []) {
@@ -238,6 +242,7 @@ export function WordDetail({
         <ScrollView
           className="flex-1"
           contentContainerClassName="px-5 pb-8"
+          scrollEnabled={!penDown}
           keyboardShouldPersistTaps="handled">
           <Container max={MAX_W.content}>
           {/* Move between lists */}
@@ -512,6 +517,9 @@ export function WordDetail({
             {updateNotes.isError && (
               <Text className="mt-2 text-sm text-primary">{updateNotes.error.message}</Text>
             )}
+
+            {/* Handwriting — secondary to the typed note, so it starts closed */}
+            <WordInk wordId={w.id} onDrawingChange={setPenDown} />
           </View>
 
           {/* Example sentences */}

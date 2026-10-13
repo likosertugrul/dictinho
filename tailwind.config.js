@@ -16,10 +16,19 @@ module.exports = {
         border: '#2C2C2C',
         pastel: {
           cream: '#F3ECDD',
+          white: '#FAF8F3',
           yellow: '#F4C542',
           mint: '#CFE6C9',
           blush: '#F2D6CE',
           sky: '#BFE3F2',
+        },
+        // Canvas ink (src/components/ink) — not UI surfaces
+        inks: {
+          ink: '#141414',
+          coral: '#F5654E',
+          blue: '#2B5FA8',
+          green: '#2F6F4E',
+          plum: '#7A3E7E',
         },
       },
       borderRadius: {

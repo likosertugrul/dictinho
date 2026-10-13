@@ -142,7 +142,45 @@ create table srs_reviews (
   rating      int not null,                 -- 0..5 (SM-2 quality)
   reviewed_at timestamptz not null default now()
 );
+
+-- El yazısı notlar (tablet kalemi). 0019 ile eklendi.
+-- Vektör saklanır (bitmap değil): küçük, geri alınabilir, temaya uyar.
+-- strokes şekli: [{ "c": "#141414", "w": 7, "p": [[x, y, pressure], …] }, …]
+-- Koordinatlar sabit sanal uzayda (1000 × 520), bkz. src/components/ink/strokes.ts
+create table ink_drawings (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  kind         text not null,               -- 'word' | 'page'
+  user_word_id uuid references user_words(id) on delete cascade,
+  title        text,                        -- yalnız defter sayfalarında
+  strokes      jsonb not null default '[]'::jsonb,
+  width        real not null,               -- 1000 (INK_W)
+  height       real not null,               -- 520  (INK_H)
+  position     int,                          -- defter sayfa sırası
+  paper        text,                        -- 0020: cream|white|mint|blush|sky (null = varsayılan)
+  rule         text,                        -- 0020: lines|grid|dots|blank (null = varsayılan)
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  -- kelime çizimi bir kelimeye bakar; defter sayfası hiçbir kelimeye bakmaz
+  constraint ink_drawings_target check (
+    (kind = 'word' and user_word_id is not null)
+    or (kind = 'page' and user_word_id is null)
+  )
+);
 ```
+
+`ink_drawings` NEDEN ayrı tablo: kelime listesi sorguları `select('*')` kullanıyor
+(`src/lib/words.ts`), stroke verisi `user_words`'te dururken her liste açılışında
+boşuna çekilirdi.
+
+`paper`/`rule` serbest text (pos/topic gibi): geçerli anahtarlar `src/lib/paper.ts`'te,
+DB kısıt koymuyor — okurken `asPaper()`/`asRule()` bilinmeyen değeri varsayılana
+çeviriyor, bu yüzden null bırakılan eski satırlar backfill gerektirmedi.
+
+`ink_drawings_word_unique` **kısmi değil tam** unique index (`user_word_id`):
+defter sayfaları bu kolonu null bırakır, null'lar çakışmaz — ve PostgREST
+`on_conflict` hedefi olarak yalnız tam index'i adlandırabiliyor, upsert bu yüzden
+tek istekte çalışıyor.
 
 ## İndeksler
 

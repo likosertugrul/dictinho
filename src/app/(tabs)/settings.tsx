@@ -32,6 +32,7 @@ export default function SettingsScreen() {
               [
                 { key: 'typing', label: 'Typing', hint: 'Write the word yourself' },
                 { key: 'choice', label: 'Choices', hint: 'Pick from four options' },
+                { key: 'handwriting', label: 'Writing', hint: 'Write it with a stylus' },
               ] as const
             ).map(({ key, label, hint }) => {
               const active = answerMode === key;

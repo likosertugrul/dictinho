@@ -191,6 +191,7 @@ export default function PracticeScreen() {
                 [
                   { key: 'typing', label: 'Typing', icon: 'create-outline' },
                   { key: 'choice', label: 'Choices', icon: 'list-outline' },
+                  { key: 'handwriting', label: 'Writing', icon: 'pencil-outline' },
                 ] as const
               ).map(({ key, label, icon }) => {
                 const active = answerMode === key;

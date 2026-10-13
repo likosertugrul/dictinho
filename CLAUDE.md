@@ -8,7 +8,15 @@ Mobile-first İtalyanca öğrenme/sözlük uygulaması. İlk dil çifti **EN →
 ## Stack
 
 - **Expo SDK 54** (RN 0.81, React 19.1) + TypeScript + **Expo Router 6** (typed routes açık)
-  — SDK 54'e sabit: kullanıcının Expo Go client'ı (1017756) bu sürümü destekliyor, YÜKSELTME
+  — DİKKAT (2026-10-13): kullanıcının Expo Go client'ı kendini **57**'ye güncelledi
+  (SDK 57 = RN 0.86, React 19.2.3). Expo Go tek seferde tek SDK destekler, bu yüzden
+  SDK 54 projesi artık Expo Go'da AÇILMIYOR ("Project is incompatible with this
+  version of Expo Go"). Eski "client 54'ü destekliyor" gerekçesi geçersiz.
+  Şimdilik SDK 54'te kalındı; tablet/mobil doğrulama **tarayıcıdan dev server'a**
+  bağlanarak yapılıyor (`npx expo start --port 8082` → `http://<LAN-IP>:8082`).
+  Native Expo Go testi gerekirse iki yol var: SDK 54'lük Expo Go APK'sını yan yüklemek
+  (`expo.dev/go?sdkVersion=54&platform=android`) veya projeyi SDK 57'ye yükseltmek
+  (AGENTS.md zaten v57 dokümanını işaret ediyor)
 - `babel-preset-expo` devDependency olarak açıkça ekli (SDK 54'te hoist edilmiyor)
 - **NativeWind 4** (Tailwind 3) — renkler `tailwind.config.js` ↔ `src/theme/tokens.ts` SENKRON tutulur
 - **Supabase** (Postgres + Auth + Edge Functions) — henüz bağlanmadı (Faz 1)
@@ -189,6 +197,91 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   İsim/sıfat çekimleri DB'de olmadığından orada `isNearMiss` ile yumuşak
   "Did you mean finestra?" ipucu var (yönlendirme değil, öneri).
   AI yolu zaten sözlük formuna çeviriyor (vado→andare, rosse→rosso, scritto→scrivere)
+- 🟡 El yazısı notlar — Faz A (2026-10-13): tablet kalemiyle yazma. `react-native-svg`
+  (Expo Go'ya gömülü, custom native modül YOK) + RN pointer olayları — `pointerType`,
+  `pressure`, `tiltX/Y` hem Android native'de hem web'de aynı API'den geliyor
+  (react-native-web bu prop'ları doğrudan DOM'a geçiriyor), yani TEK uygulama iki
+  platformu karşılıyor. `src/components/ink/`: `strokes.ts` (sabit sanal uzay
+  1000×520, RDP sadeleştirme, basınca göre değişken kalınlıklı tek `<Path fill>`
+  outline — stroke'lu path tek kalınlık verirdi), `ink-canvas.tsx` (yakalama;
+  pointer hedefi SVG'nin ÜSTÜNDEKİ overlay View — yoksa `offsetX` path'e göre
+  ölçülürdü; avuç reddi: bir kez gerçek kalem görülünce `touch` yok sayılır;
+  canlı çizgi ref + rAF, yoksa 120Hz kalem her örnekte render tetikler),
+  `ink-pad.tsx` (krem sayfa + çizgili kılavuz, 2 renk/3 kalınlık/silgi/geri al/temizle),
+  `word-ink.tsx` (kelime kartında KAPALI başlar — yazılı not birincil).
+  `src/lib/ink.ts` hook'ları, migration `0019_ink_drawings.sql`.
+  Kart ScrollView'ı kalem inince donuyor (`scrollEnabled={!penDown}`).
+  `0019` uygulandı ve uçtan uca doğrulandı (iki anonim oturumla: insert, stroke
+  verisi bozulmadan dönüyor, RLS yabancıya kapalı, check kısıtı kelimesiz 'word'
+  çizimini reddediyor, updated_at trigger'ı ilerliyor). Web bundle'ında sızıntı yok
+  (yalnız anon key gömülü). KALAN: tablette kalemle görsel doğrulama (tarayıcıdan,
+  bkz. SDK notu) ve Faz B (pratikte elle cevap) + Faz C (defter sekmesi) — ikisi de
+  planlandı, yazılmadı
+- 🟡 El yazısı — Faz B (2026-10-13): pratikte elle cevap. `settings.answerMode`
+  üçüncü değeri **`'handwriting'`** (Practice ve Settings sekmelerindeki "Answer with"
+  seçicilerine "Writing" eklendi). Kart çıkar → kalemle yazarsın → **"Show answer"**
+  → cevap görünür ve **kendin puanlarsın**: "Missed it" / "Got it" / "Easy".
+  OCR YOK; uygulama el yazısını okumadığı için otomatik bir hüküm vermiyor —
+  bu yüzden açılan rozet "Correct!/Not quite" değil nötr **"Check your writing"**.
+  `next(rating, selfVerdict?)` kullanıcının hükmünü alıyor (state async olduğu için
+  `wasCorrect`'i okumak güvenli değildi). Yakın hata ("So close") yazmada kalıyor:
+  karşılaştırılacak metin olmadığı için el yazısında ölçülemez.
+  Çizim oturumla sınırlı, DB'ye yazılmıyor (pratik karalaması) ama `history`'de
+  tutuluyor → "look back" ekranında "what you wrote" altında kendi yazın görünüyor.
+  `InkCanvas`/`InkPad` artık `vh` prop'u alıyor (`INK_LINE_H = 260`, tek satırlık
+  pad; kılavuz çizgileri yükseklikten hesaplanıyor), kart pad'i varsayılan `INK_H`.
+  Pratik ScrollView'ı da kalem inince donuyor
+- 🟡 El yazısı — Faz C (2026-10-14): **Notebook sekmesi** (5. tab, Practice ile Profile
+  arası, `book-outline`). `(tabs)/notebook.tsx` sayfa ızgarası (telefon 2 / tablet 3 /
+  xl 4 sütun; her kart krem sayfa + gerçek ink önizlemesi, "Untitled page",
+  "Today/Yesterday/3 days ago/14 Oct"), `note/[id].tsx` düzenleyici (root layout'ta
+  modal). Sayfalar `ink_drawings`'te `kind='page'` (0019 zaten hazırdı; yeni migration
+  YOK), `src/lib/notebook.ts` hook'ları — oluşturmada `position = son + 1`.
+  Kaydırma/zoom YOK: sayfa, kalan boşluğa sığacak şekilde ölçekleniyor
+  (`min(boxW, boxH × INK_W/INK_PAGE_H)`, `INK_PAGE_H = 1400` ≈ A4 oranı) — bilinçli
+  karar, yarım yamalak pinch-zoom yerine "daha fazla yer lazımsa yeni sayfa".
+  Bu yüzden `InkPad`'in araç çubuğu `InkToolbar` olarak ayrıldı: sayfa ölçülen
+  alanın içinde, çubuk dışında kalmalı. Başlık yerinde düzenleniyor (blur/submit'te
+  kaydediliyor), silme iki adımlı onay, kapatırken kaydedilmemiş çizim otomatik
+  kaydediliyor ("Discard" ile atılabiliyor).
+  DB'ye karşı doğrulandı (gerçek anon oturumla: create ×2 → position 1,2 artıyor;
+  strokes kaydı; rename; liste sorgusu; tek sayfa; kind='word' satırları listeye
+  karışmıyor; silme → 0 kaldı). KALAN: tablette görsel doğrulama; sayfa sıralamasını
+  elle değiştirme (reorder) UI'ı yapılmadı — `position` kolonu hazır
+- ✅ El yazısı — kalem/kâğıt rötuşları (2026-10-14, kullanıcı Samsung tabletinde
+  kalemi doğruladı: basınç + avuç reddi çalışıyor):
+  • **Donanım silgisi**: S Pen yan düğmesi basılı dokunuş silgiye geçiyor.
+    W3C'ye göre `pointerType` her zaman `'pen'` kalır, ayrı 'eraser' tipi YOK —
+    sinyal düğmelerde: S Pen yan düğmesi **barrel** bit'i (`buttons & 2`),
+    USI/Wacom silgi ucu **eraser** bit'i (`buttons & 32` / `button === 5`).
+    `penWantsEraser()` yalnız `pointerType === 'pen'` için bakıyor (parmak/fare asla
+    silmez) ve karar **pointerdown'da bir kez** veriliyor (`erasingStroke` ref) —
+    düğme çizgi ortasında bırakılırsa davranış değişmesin diye
+  • **Kâğıt seçimi**: `0020` ile `ink_drawings.paper` + `.rule`; anahtarlar
+    `src/lib/paper.ts` (5 kâğıt: cream/white/mint/blush/sky — hepsi AÇIK renk,
+    çünkü 5 mürekkebin hepsi her kâğıtta okunur kalmalı; 4 çizgi stili:
+    lines/grid/dots/blank). Defter düzenleyicisinde palet butonu → panel,
+    seçim anında kaydediliyor. Izgara ve noktalı kâğıt TEK `<Path>` olarak
+    üretiliyor (`gridPath`/`dotsPath` — 204 nokta 204 SVG düğümü olmasın diye),
+    çizgili kâğıt yükseklikten hesaplanıyor (`ruleGuides`)
+  • **Araç çubuğu**: 5 mürekkep rengi + 3 kalınlık (1. satır), etiketli **Eraser**
+    + geri al + temizle (2. satır). İki satır, çünkü 11 kontrol telefon genişliğine
+    tek satırda sığmıyor. Yeni renkler `tokens.ts` → `colors.inks` ve
+    `tailwind.config.js` aynasına eklendi (DESIGN.md kuralı)
+  Doğrulamalar: tsc temiz, web build ok, DB'ye karşı paper/rule round-trip
+  (null→varsayılan, sky/grid yazıldı, liste getiriyor), geometri testi
+  (sayfa 8 baseline / kart 3 / tek satır 1 — eski sabit 170,330,490 ile birebir aynı)
+- ✅ Defter sabit yerleşim düzeltmesi (2026-10-14, kullanıcı bildirdi: "her
+  dokunduğumda boyut değişiyor"): sayfa `flex-1` kutuya sığdırıldığı için ALTTAKİ
+  bloğun yüksekliği değişince sayfa da yeniden ölçekleniyordu. Üç ayrı kaynak vardı:
+  (1) `dirty` olunca ipucu metni Save/Discard satırına dönüşüyordu — artık buton
+  satırı HER ZAMAN duruyor, temizken pasif ve "Saved" yazıyor; (2) `InkPad`'in
+  "Write with your stylus…" ipucu ilk çizgide kayboluyordu — artık sabit 34px'lik
+  bir yuvada (kelime kartı ve flashcard'ı da etkiliyordu); (3) kâğıt paneli ve silme
+  onayı kolonun içindeydi — artık `Overlay` ile ekranın üstünde yüzüyor (karartma
+  rgba, NativeWind alpha'ya güvenilmedi), hata mesajları da absolute toast.
+  KURAL: bu ekranda sayfa alanının yüksekliğini değiştiren hiçbir şey kolona
+  eklenmemeli — koşullu yükseklik = çizim ortasında yeniden ölçeklenen sayfa
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için

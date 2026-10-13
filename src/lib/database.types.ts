@@ -116,6 +116,41 @@ type SrsReviewRow = {
   reviewed_at: string;
 };
 
+type InkDrawingRow = {
+  id: string;
+  user_id: string;
+  /** 'word' = the handwritten note on a word card; 'page' = a notebook page. */
+  kind: string;
+  user_word_id: string | null;
+  title: string | null;
+  /** See src/components/ink/strokes.ts for the shape. */
+  strokes: unknown;
+  width: number;
+  height: number;
+  position: number | null;
+  /** Sheet colour key; null falls back to the app default (src/lib/paper.ts). */
+  paper: string | null;
+  /** Ruling key; null falls back to the app default. */
+  rule: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type InkDrawingInsert = Omit<
+  InkDrawingRow,
+  | 'id'
+  | 'created_at'
+  | 'updated_at'
+  | 'title'
+  | 'position'
+  | 'user_word_id'
+  | 'paper'
+  | 'rule'
+> &
+  Partial<
+    Pick<InkDrawingRow, 'id' | 'title' | 'position' | 'user_word_id' | 'paper' | 'rule'>
+  >;
+
 type Table<Row, Insert = Partial<Row>> = {
   Row: Row;
   Insert: Insert;
@@ -137,6 +172,7 @@ export type Database = {
       example_sentences: Table<ExampleSentenceRow>;
       srs_cards: Table<SrsCardRow>;
       srs_reviews: Table<SrsReviewRow>;
+      ink_drawings: Table<InkDrawingRow, InkDrawingInsert>;
     };
     Views: Record<string, never>;
     Functions: {

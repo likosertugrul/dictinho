@@ -17,6 +17,9 @@ import { ArticleInfo } from '@/components/article-info';
 import { Container } from '@/components/container';
 import { Speaker } from '@/components/speaker';
 import { WordCardModal } from '@/components/word-card-modal';
+import { InkCanvas } from '@/components/ink/ink-canvas';
+import { InkPad } from '@/components/ink/ink-pad';
+import { INK_LINE_H, type InkStroke } from '@/components/ink/strokes';
 import { MAX_W } from '@/hooks/use-responsive';
 import { isNearMiss, matchesLemma } from '@/lib/italian';
 import { langInfo, useTargetLang } from '@/lib/lang';
@@ -42,7 +45,7 @@ import {
 } from '@/lib/srs';
 import { useRecentWords, useToggleFlag } from '@/lib/words';
 import { speechService } from '@/services/speech';
-import { colors } from '@/theme/tokens';
+import { colors, radius } from '@/theme/tokens';
 
 /** A card the user has already answered in this session. */
 interface AnsweredCard {
@@ -51,6 +54,8 @@ interface AnsweredCard {
   wasCorrect: boolean;
   /** Wrong, but only by a letter or two. */
   nearMiss: boolean;
+  /** Handwritten answer, kept for the session so "look back" can show it. */
+  ink?: InkStroke[];
 }
 
 /** What an empty drill says, per mode. */
@@ -178,6 +183,12 @@ export default function SrsScreen() {
   const [wasCorrect, setWasCorrect] = useState(false);
   const [nearMiss, setNearMiss] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
+  // Handwritten answer for this card. Session-only: practice scribbles are not
+  // worth a row in the database.
+  const [ink, setInk] = useState<InkStroke[]>([]);
+  const [penDown, setPenDown] = useState(false);
+  // Handwriting cannot be graded automatically, so the user says how they did.
+  const [selfCheck, setSelfCheck] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   const [cardOpen, setCardOpen] = useState(false);
   // Cards already answered this session, so the user can look back at them.
@@ -254,16 +265,38 @@ export default function SrsScreen() {
 
   const giveUp = () => reveal(false);
 
-  const next = (rating: Rating) => {
+  /**
+   * Handwriting reveal: show the answer without claiming a verdict. Nothing is
+   * scheduled until the user says whether they got it.
+   */
+  const showForSelfCheck = () => {
     if (!current) return;
+    setSelfCheck(true);
+    setRevealed(true);
+    speakAnswer(current);
+  };
+
+  const next = (rating: Rating, selfVerdict?: boolean) => {
+    if (!current) return;
+    // Self-checked cards never count as near misses — there is no text to
+    // compare, so "a letter or two off" has nothing to measure.
+    const correct = selfVerdict ?? wasCorrect;
     review.mutate({ card: current.card, rating, nearMiss });
     setHistory((h) => [
       ...h,
-      { card: current, guess: (picked ?? guess).trim(), wasCorrect, nearMiss },
+      {
+        card: current,
+        guess: (picked ?? guess).trim(),
+        wasCorrect: correct,
+        nearMiss,
+        ink: ink.length > 0 ? ink : undefined,
+      },
     ]);
     setReviewed((n) => n + 1);
     setGuess('');
     setPicked(null);
+    setInk([]);
+    setSelfCheck(false);
     setRevealed(false);
     setNearMiss(false);
     setCardOpen(false);
@@ -326,6 +359,8 @@ export default function SrsScreen() {
     resumeSession();
     setGuess('');
     setPicked(null);
+    setInk([]);
+    setSelfCheck(false);
     setRevealed(false);
     setQueue(due.data ?? []);
   };
@@ -385,6 +420,7 @@ export default function SrsScreen() {
   // move the answer around under the user's finger.
   const choices = choicesFor(current, answerMode === 'choice' ? allWords.data : undefined);
   const useChoices = !past && answerMode === 'choice' && choices.length > 1;
+  const useWriting = !past && answerMode === 'handwriting';
   // Synonyms accepted besides the card's own word (e.g. what → cosa, che cosa)
   const otherAccepted = shown.accept.filter((l) => l !== word.lemma);
   const done = reviewed;
@@ -394,6 +430,7 @@ export default function SrsScreen() {
   const shownCorrect = past ? past.wasCorrect : wasCorrect;
   const shownNear = past ? past.nearMiss : nearMiss;
   const shownGuess = past ? past.guess : (picked ?? guess);
+  const shownInk = past ? past.ink : ink.length > 0 ? ink : undefined;
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
@@ -416,6 +453,7 @@ export default function SrsScreen() {
         <ScrollView
           className="flex-1"
           contentContainerClassName="grow justify-center px-5 py-2"
+          scrollEnabled={!penDown}
           keyboardShouldPersistTaps="handled">
           <Container max={MAX_W.card}>
           {/* Prompt: meaning in the source language → guess the target word */}
@@ -498,6 +536,15 @@ export default function SrsScreen() {
                     </Pressable>
                   ))}
                 </View>
+              ) : useWriting ? (
+                <View className="mt-6 w-full">
+                  <InkPad
+                    strokes={ink}
+                    onChange={setInk}
+                    vh={INK_LINE_H}
+                    onDrawingChange={setPenDown}
+                  />
+                </View>
               ) : (
                 <View className="mt-6 w-full flex-row items-center rounded-2xl bg-surfaceAlt px-4">
                   <TextInput
@@ -522,6 +569,12 @@ export default function SrsScreen() {
             ) : (
               <View className="mt-6 w-full items-center">
                 {/* Result */}
+                {selfCheck && !past ? (
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons name="eye-outline" size={22} color={colors.textLo} />
+                    <Text className="text-lg font-bold text-textLo">Check your writing</Text>
+                  </View>
+                ) : (
                 <View className="flex-row items-center gap-2">
                   <Ionicons
                     name={
@@ -552,6 +605,7 @@ export default function SrsScreen() {
                     {shownCorrect ? 'Correct!' : shownNear ? 'So close!' : 'Not quite'}
                   </Text>
                 </View>
+                )}
                 {!shownCorrect && shownNear && (
                   <Text className="mt-1 text-xs text-textLo">just a letter or two off</Text>
                 )}
@@ -575,6 +629,19 @@ export default function SrsScreen() {
                   <Text className="mt-1 text-sm text-textLo">
                     you {picked && !past ? 'picked' : 'wrote'}: {shownGuess.trim()}
                   </Text>
+                )}
+                {shownInk && shownInk.length > 0 && (
+                  <View className="mt-4 w-full">
+                    <Text className="mb-1.5 text-center text-xs text-textLo">what you wrote</Text>
+                    <View
+                      className="overflow-hidden"
+                      style={{
+                        borderRadius: radius.md,
+                        backgroundColor: colors.pastel.cream,
+                      }}>
+                      <InkCanvas strokes={shownInk} vh={INK_LINE_H} />
+                    </View>
+                  </View>
                 )}
                 {/* Other accepted synonyms for this meaning */}
                 {otherAccepted.length > 0 && (
@@ -660,6 +727,22 @@ export default function SrsScreen() {
                 className="items-center rounded-full bg-surfaceAlt py-4">
                 <Text className="text-sm font-bold text-textLo">Skip — show the answer</Text>
               </Pressable>
+            ) : useWriting ? (
+              // Handwriting can't be checked by the app, so it only reveals
+              <View className="flex-row gap-2">
+                <Pressable
+                  onPress={giveUp}
+                  className="items-center justify-center rounded-full bg-surfaceAlt px-5 py-4">
+                  <Text className="text-sm font-bold text-textLo">Skip</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel="Show the answer and grade yourself"
+                  onPress={showForSelfCheck}
+                  className="flex-1 flex-row items-center justify-center gap-2 rounded-full bg-primary py-4">
+                  <Ionicons name="eye-outline" size={18} color={colors.onPrimary} />
+                  <Text className="text-base font-bold text-white">Show answer</Text>
+                </Pressable>
+              </View>
             ) : (
               <View className="flex-row gap-2">
                 <Pressable
@@ -678,6 +761,28 @@ export default function SrsScreen() {
                 </Pressable>
               </View>
             )
+          ) : selfCheck ? (
+            // Only the writer can say whether the handwriting was right
+            <View className="flex-row gap-2">
+              <Pressable
+                accessibilityLabel="I missed this one"
+                onPress={() => next('again', false)}
+                className="flex-1 items-center rounded-2xl bg-surfaceAlt py-4">
+                <Text className="text-sm font-bold text-primary">Missed it</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="I got this one right"
+                onPress={() => next('good', true)}
+                className="flex-1 items-center rounded-2xl bg-primary py-4">
+                <Text className="text-sm font-bold text-white">Got it</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="I got this one easily"
+                onPress={() => next('easy', true)}
+                className="flex-1 items-center rounded-2xl bg-surfaceAlt py-4">
+                <Text className="text-sm font-bold text-textHi">Easy</Text>
+              </Pressable>
+            </View>
           ) : wasCorrect ? (
             // Correct → schedule further out; let the user say how easy it felt
             <View className="flex-row gap-2">

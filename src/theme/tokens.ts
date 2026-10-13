@@ -14,12 +14,25 @@ export const colors = {
   // Pastel category-card palette (black text on top: onPastel)
   pastel: {
     cream: '#F3ECDD',
+    white: '#FAF8F3',
     yellow: '#F4C542',
     mint: '#CFE6C9',
     blush: '#F2D6CE',
     sky: '#BFE3F2',
   },
   onPastel: '#141414',
+  /**
+   * Handwriting ink. These are canvas colours, not UI surfaces — every one of
+   * them has to stay legible on all of the pastel papers, which is why there
+   * is no light ink here.
+   */
+  inks: {
+    ink: '#141414',
+    coral: '#F5654E',
+    blue: '#2B5FA8',
+    green: '#2F6F4E',
+    plum: '#7A3E7E',
+  },
 } as const;
 
 export const radius = {
@@ -47,3 +60,4 @@ export const typography = {
 } as const;
 
 export type PastelColor = keyof typeof colors.pastel;
+export type InkColor = keyof typeof colors.inks;
