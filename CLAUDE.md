@@ -282,6 +282,29 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   rgba, NativeWind alpha'ya güvenilmedi), hata mesajları da absolute toast.
   KURAL: bu ekranda sayfa alanının yüksekliğini değiştiren hiçbir şey kolona
   eklenmemeli — koşullu yükseklik = çizim ortasında yeniden ölçeklenen sayfa
+- 🟡 iPad Safari düzeltmeleri (2026-10-14; Samsung tablet+kalem ÇALIŞIYOR, kullanıcı
+  doğruladı — iPad Safari'de "çiziyor ama sayfa kayıyor/zıplıyor"):
+  • iPad Safari **pinch-zoom ve çift-dokunma zoom'unu `touch-action: none` ile
+    ENGELLEMİYOR** — avuç cama değince sayfa yakınlaşıyor. Tek yol WebKit'e özgü
+    `gesturestart/gesturechange/gestureend` + çok parmaklı `touchmove`'da
+    `preventDefault()`; bunlar RN prop yüzeyinde yok, bu yüzden `InkCanvas`'ta
+    web'e özel DOM dinleyicileri var (overlay ref'i üzerinden). Yalnızca çizim
+    yüzeyine bağlı: uygulamanın geri kalanında zoom çalışmaya devam ediyor.
+    Tek parmaklı `touchmove` KASITLI olarak engellenmiyor — onu iptal etmek
+    çizgi ortasında pointer akışını kesebilir
+  • `pointercancel` artık çizgiyi ATMIYOR (`finish(e, true)`): Safari bu olayı
+    Android'den çok daha kolay tetikliyor, eski davranış mürekkebi sessizce yutuyordu
+  • `WebkitUserSelect` + `WebkitTouchCallout` eklendi (Safari yalnız önekli
+    biçimleri dikkate alıyor; callout açıkken uzun basışta kendi menüsü açılıyordu)
+  • DİKKAT: effect bağımlılığı `edit` DEĞİL `editable` (boolean) — `edit` her
+    render'da yeni nesne ve tuval çizim sırasında her animasyon karesinde
+    render ediliyor, yoksa dinleyiciler saniyede ~60 kez sökülüp takılırdı
+  • Belgeye (index.html) dokunulmadı: Expo varsayılanında `body{overflow:hidden}`
+    zaten var, ayrıca `+html.tsx` dokümana göre statik render için ve proje
+    `output:'single'` kullanıyor — orada uygulanacağı garanti değil.
+    Zıplama sürerse sıradaki adım viewport meta (`maximum-scale=1`) ve
+    `overscroll-behavior:none`, ama önce +html.tsx'in SPA'da işlediği ölçülmeli
+  KALAN: iPad'de yeniden test (henüz deploy edilmedi, commit bekliyor)
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Platform, View, type LayoutChangeEvent, type PointerEvent } from 'react-native';
 import Svg, { Line, Path } from 'react-native-svg';
 
@@ -41,6 +41,12 @@ const ERASER_RADIUS = 26;
 const MIN_STEP = 1.5;
 
 const GUIDE_COLOR = '#141414';
+
+/** Just enough of the DOM to attach web-only listeners, no `any`. */
+interface DomNode {
+  addEventListener(type: string, handler: (e: Event) => void, options?: object): void;
+  removeEventListener(type: string, handler: (e: Event) => void): void;
+}
 
 /**
  * A pen asking to erase by hardware rather than by the toolbar: a USI/Wacom
@@ -93,6 +99,43 @@ export function InkCanvas({ strokes, vh = INK_H, rule = null, edit }: Props) {
   const erasingStroke = useRef(false);
   const origin = useRef({ x: 0, y: 0 });
   const container = useRef<View>(null);
+  const overlay = useRef<View>(null);
+
+  /**
+   * iPad Safari ignores `touch-action: none` for its own pinch-zoom and
+   * double-tap zoom, so writing with a palm on the glass zooms the page
+   * instead of drawing. Those gestures are only cancellable through the
+   * WebKit-specific `gesture*` events and a multi-touch `touchmove`, which
+   * React Native's prop surface does not expose — hence the DOM listeners.
+   *
+   * Scoped to the drawing surface on purpose: pinch-to-zoom keeps working
+   * everywhere else in the app.
+   */
+  const editable = edit != null;
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !editable) return;
+    const node = overlay.current as unknown as DomNode | null;
+    if (!node?.addEventListener) return;
+
+    const prevent = (e: Event) => e.preventDefault();
+    // Single touches are already handled by `touch-action`; cancelling those
+    // here could interrupt the pointer stream mid-stroke.
+    const preventPinch = (e: Event) => {
+      const touches = (e as unknown as { touches?: { length: number } }).touches;
+      if (touches && touches.length > 1) e.preventDefault();
+    };
+
+    const gestures = ['gesturestart', 'gesturechange', 'gestureend'];
+    for (const type of gestures) node.addEventListener(type, prevent, { passive: false });
+    node.addEventListener('dblclick', prevent, { passive: false });
+    node.addEventListener('touchmove', preventPinch, { passive: false });
+
+    return () => {
+      for (const type of gestures) node.removeEventListener(type, prevent);
+      node.removeEventListener('dblclick', prevent);
+      node.removeEventListener('touchmove', preventPinch);
+    };
+  }, [editable]);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -230,10 +273,15 @@ export function InkCanvas({ strokes, vh = INK_H, rule = null, edit }: Props) {
       */}
       {edit && (
         <View
+          ref={overlay}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={(e) => finish(e, true)}
-          onPointerCancel={(e) => finish(e, false)}
+          // Keep the ink on cancel. iOS Safari fires pointercancel far more
+          // readily than Android does (a system gesture taking over, its own
+          // palm detection), and silently dropping the stroke the user just
+          // drew is worse than keeping a slightly short one.
+          onPointerCancel={(e) => finish(e, true)}
           onStartShouldSetResponder={() => true}
           onMoveShouldSetResponder={() => true}
           onResponderTerminationRequest={() => false}
@@ -243,7 +291,15 @@ export function InkCanvas({ strokes, vh = INK_H, rule = null, edit }: Props) {
             // drawing, and `userSelect` stops a drag from highlighting the
             // card's text mid-letter.
             Platform.OS === 'web'
-              ? ({ touchAction: 'none', userSelect: 'none', cursor: 'crosshair' } as object)
+              ? ({
+                  touchAction: 'none',
+                  userSelect: 'none',
+                  // iOS Safari honours only the prefixed forms, and without
+                  // the callout a long press pops up its own menu mid-stroke.
+                  WebkitUserSelect: 'none',
+                  WebkitTouchCallout: 'none',
+                  cursor: 'crosshair',
+                } as object)
               : null,
           ]}
         />
