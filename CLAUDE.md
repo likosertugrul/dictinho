@@ -305,6 +305,34 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
     Zıplama sürerse sıradaki adım viewport meta (`maximum-scale=1`) ve
     `overscroll-behavior:none`, ama önce +html.tsx'in SPA'da işlediği ölçülmeli
   KALAN: iPad'de yeniden test (henüz deploy edilmedi, commit bekliyor)
+- ✅ El yazısı native'de çalışmıyordu — KÖK SEBEP ve düzeltme (2026-10-16):
+  iPhone dev build'inde çizim hiç olmuyordu. Sebep: **iOS'ta RN'in W3C pointer
+  olayları bir native bayrağın arkasında ve varsayılanı KAPALI** —
+  `static BOOL RCTDispatchW3CPointerEvents = NO;`
+  (`node_modules/react-native/React/Base/RCTConstants.m:30`). Yani `onPointerDown`
+  iOS'ta hiç tetiklenmiyor. Android native de hiç test edilmemişti (tablette
+  tarayıcıdan test edilmişti), yani orada da büyük olasılıkla bozuktu.
+  ÇÖZÜM — tek motor, iki platform adaptörü:
+  • `src/components/ink/ink-canvas.tsx` artık sadece motor (begin/extend/end + SVG)
+  • `ink-surface.web.tsx` → pointer olayları (basınç + S Pen yan düğme silgisi +
+    iPad Safari gesture engelleme). Web'de doğrulanmış yol aynen korundu
+  • `ink-surface.native.tsx` → `Gesture.Pan()` + `stylusData`. RNGH basıncı İKİ
+    native platformda da native olarak uyguluyor (`apple/RNGHStylusData.m`,
+    `android/.../StylusData.kt`). `minDistance(0)` (nokta koyabilmek için),
+    `maxPointers(1)`, `runOnJS(true)` (callback'ler ref/state'e dokunuyor)
+  • `types.ts` paylaşılan tipler; Metro platforma göre dosyayı seçiyor
+  • `GestureHandlerRootView` projede HİÇ YOKTU → `src/components/gesture-root.*`
+    (native'de sarmalayıcı, web'de passthrough) ve `_layout.tsx`'e eklendi
+  • `tsconfig.json`'a `moduleSuffixes: ['.native','']` — yoksa tsc platform
+    dosyalarını çözemiyor (iki dosya da ayrıca tip kontrolünden geçiyor)
+  DİKKAT — web bundle regresyonu: RNGH'yi doğrudan import edince web bundle
+  2.59 → **3.58 MB** olmuştu (web onu hiç kullanmıyor). Platform dosyalarına
+  ayırınca 2.59'a döndü. Bir daha RNGH'yi platform-bağımsız bir dosyaya
+  import ETMEYİN
+  SINIR: kalem yan düğmesi silgisi yalnızca WEB'de. Native gesture payload'ında
+  düğme durumu yok (StylusData = tiltX/tiltY/azimuth/altitude/pressure), uygulamada
+  silgi araç çubuğundan. Yeni native build GEREKMEDİ — RNGH zaten dev build'in
+  içindeydi, fast refresh ile telefona düştü
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için

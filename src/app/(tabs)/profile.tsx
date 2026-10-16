@@ -22,6 +22,64 @@ import { colors } from '@/theme/tokens';
 
 type Mode = 'create' | 'signin';
 
+/**
+ * Deleting an account from inside the app is required by the App Store
+ * (Guideline 5.1.1(v)). The two-step confirm matches how a word is deleted —
+ * it also works on the web, where a native alert would not.
+ */
+function DeleteAccount({
+  label,
+  description,
+  pending,
+  onDelete,
+}: {
+  label: string;
+  description: string;
+  pending: boolean;
+  onDelete: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (!confirming) {
+    return (
+      <Pressable
+        accessibilityLabel={label}
+        onPress={() => setConfirming(true)}
+        className="mt-8 flex-row items-center justify-center gap-1.5 rounded-full border border-border py-3">
+        <Ionicons name="trash-outline" size={16} color={colors.primary} />
+        <Text className="text-sm font-semibold text-primary">{label}</Text>
+      </Pressable>
+    );
+  }
+
+  return (
+    <View className="mt-8 rounded-card bg-surface p-4">
+      <Text className="text-center text-sm font-bold text-textHi">{label}?</Text>
+      <Text className="mt-1 text-center text-xs text-textLo">{description}</Text>
+      <View className="mt-4 flex-row gap-2">
+        <Pressable
+          accessibilityLabel="Cancel"
+          disabled={pending}
+          onPress={() => setConfirming(false)}
+          className="flex-1 items-center rounded-full bg-surfaceAlt py-3">
+          <Text className="text-sm font-bold text-textHi">Keep my account</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="Confirm deletion"
+          disabled={pending}
+          onPress={onDelete}
+          className="flex-1 items-center rounded-full bg-primary py-3">
+          {pending ? (
+            <ActivityIndicator color={colors.onPrimary} />
+          ) : (
+            <Text className="text-sm font-bold text-white">Delete</Text>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function LanguageCard() {
   const target = langInfo(useTargetLang());
   const source = langInfo(useSourceLang());
@@ -112,6 +170,24 @@ export default function ProfileScreen() {
       if (err) throw new Error(err.message);
     });
 
+  // The account and everything in it go server-side: removing an auth user
+  // needs the service role key, so it runs in the delete-account Edge
+  // Function. Migration 0021 makes the delete cascade through every table.
+  const deleteAccount = () =>
+    run(async () => {
+      const supabase = getSupabase();
+      const { data, error: err } = await supabase.functions.invoke<{
+        deleted?: boolean;
+        error?: string;
+      }>('delete-account', { method: 'POST' });
+      if (err) throw new Error(err.message);
+      if (data?.error) throw new Error(data.error);
+      // The token belongs to a user that no longer exists, so a failing
+      // sign-out here is expected — the local session still has to go.
+      await supabase.auth.signOut().catch(() => {});
+      setInfo('Your account and everything in it have been deleted.');
+    });
+
   if (loading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-bg">
@@ -146,7 +222,14 @@ export default function ProfileScreen() {
               <Text className="text-sm font-bold text-textHi">Sign out</Text>
             )}
           </Pressable>
+          <DeleteAccount
+            label="Delete account"
+            description="Your words, conjugations, practice history and handwritten pages are removed for good. This cannot be undone."
+            pending={pending}
+            onDelete={deleteAccount}
+          />
           {error && <Text className="mt-3 text-sm text-primary">{error}</Text>}
+          {info && <Text className="mt-3 text-sm text-textLo">{info}</Text>}
           </Container>
         </ScrollView>
       </SafeAreaView>
@@ -247,6 +330,15 @@ export default function ProfileScreen() {
               </Text>
             )}
           </Pressable>
+
+          {isAnonymous && (
+            <DeleteAccount
+              label="Delete guest account"
+              description="Everything saved on this guest account — words, practice history and handwritten pages — is removed for good. You will start again with an empty account."
+              pending={pending}
+              onDelete={deleteAccount}
+            />
+          )}
 
           {error && <Text className="mt-3 text-sm text-primary">{error}</Text>}
           {info && <Text className="mt-3 text-sm text-textLo">{info}</Text>}

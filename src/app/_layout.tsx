@@ -5,6 +5,8 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
+import { GestureRoot } from '@/components/gesture-root';
+
 import { useAuthQueryInvalidation } from '@/hooks/use-auth';
 import { queryClient } from '@/lib/query';
 import { colors } from '@/theme/tokens';
@@ -30,6 +32,10 @@ function AuthSync() {
 
 export default function RootLayout() {
   return (
+    // Native only: gesture-handler's root, which the handwriting canvas needs
+    // for stylus input. On the web it is a passthrough, so the library stays
+    // out of that bundle.
+    <GestureRoot>
     <QueryClientProvider client={queryClient}>
       <AuthSync />
       <ThemeProvider value={DictinhoTheme}>
@@ -43,8 +49,10 @@ export default function RootLayout() {
           <Stack.Screen name="srs/articles" options={{ presentation: 'modal' }} />
           <Stack.Screen name="words" options={{ presentation: 'modal' }} />
           <Stack.Screen name="note/[id]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="privacy" options={{ presentation: 'modal' }} />
         </Stack>
       </ThemeProvider>
     </QueryClientProvider>
+    </GestureRoot>
   );
 }
