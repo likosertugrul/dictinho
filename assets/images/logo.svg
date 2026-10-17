@@ -1,0 +1,19 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Arka Plan (Squircle App Icon) -->
+  <rect width="512" height="512" rx="115" fill="#12131C"/>
+  
+  <!-- D Logosu Grubu -->
+  <g transform="translate(116, 116)">
+    <!-- Sol Üst Blok -->
+    <rect x="0" y="0" width="110" height="130" rx="12" fill="#FF5E4D"/>
+    
+    <!-- Sol Alt Blok -->
+    <rect x="0" y="150" width="110" height="130" rx="12" fill="#FF5E4D"/>
+    
+    <!-- Sağ Üst D Yayı -->
+    <path d="M130 0 H180 C235.228 0 280 44.7715 280 100 V130 H130 V0 Z" fill="#FF5E4D"/>
+    
+    <!-- Sağ Alt D Yayı -->
+    <path d="M130 150 H280 V180 C280 235.228 235.228 280 180 280 H130 V150 Z" fill="#FF5E4D"/>
+  </g>
+</svg>

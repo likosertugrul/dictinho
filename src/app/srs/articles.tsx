@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Screen } from '@/components/screen';
 
 import { ArticleInfo } from '@/components/article-info';
 import { Container } from '@/components/container';
@@ -230,16 +230,16 @@ export default function ArticlesScreen() {
   // flash the wrong word and could drop the drill being restored.
   if (recent.isLoading || !restored) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-bg">
+      <Screen className="flex-1 items-center justify-center bg-bg">
         <ActivityIndicator color={colors.primary} />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   // Empty state — no nouns to drill.
   if (initialQueue.length === 0 && answered === 0) {
     return (
-      <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+      <Screen className="flex-1 bg-bg" edges={['top', 'bottom']}>
         <Header progress={null} />
         <View className="flex-1 items-center justify-center px-8">
           <View className="h-16 w-16 items-center justify-center rounded-full bg-surface">
@@ -253,7 +253,7 @@ export default function ArticlesScreen() {
             <Text className="text-sm font-bold text-white">Done</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
@@ -261,7 +261,7 @@ export default function ArticlesScreen() {
   if (!current) {
     const pct = answered > 0 ? Math.round((correct / answered) * 100) : 0;
     return (
-      <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+      <Screen className="flex-1 bg-bg" edges={['top', 'bottom']}>
         <Header progress={null} />
         <View className="flex-1 items-center justify-center px-8">
           <View className="h-16 w-16 items-center justify-center rounded-full bg-surface">
@@ -289,7 +289,7 @@ export default function ArticlesScreen() {
             </Pressable>
           </View>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
@@ -298,7 +298,7 @@ export default function ArticlesScreen() {
   const revealed = past ? pastRevealed : picked !== null;
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+    <Screen className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <Header
         progress={past ? null : { done: answered, total }}
         title={past ? `Earlier · ${pastIndex! + 1} of ${history.length}` : undefined}
@@ -484,7 +484,7 @@ export default function ArticlesScreen() {
         wordId={cardOpen ? current.word.id : null}
         onClose={() => setCardOpen(false)}
       />
-    </SafeAreaView>
+    </Screen>
   );
 }
 

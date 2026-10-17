@@ -19,9 +19,14 @@ export interface Settings {
   autoSpeak: boolean;
   /** Type the word, pick it from four options, or write it with a stylus. */
   answerMode: AnswerMode;
+  /**
+   * Side navigation shown as an icon rail instead of a labelled column. Only
+   * applies where the navigation sits on the side (wide screens).
+   */
+  sidebarCollapsed: boolean;
 }
 
-const DEFAULTS: Settings = { autoSpeak: true, answerMode: 'typing' };
+const DEFAULTS: Settings = { autoSpeak: true, answerMode: 'typing', sidebarCollapsed: false };
 
 let state: Settings = { ...DEFAULTS };
 const listeners = new Set<() => void>();
@@ -50,6 +55,10 @@ function hydrate() {
             saved.answerMode === 'choice' || saved.answerMode === 'handwriting'
               ? saved.answerMode
               : state.answerMode,
+          sidebarCollapsed:
+            typeof saved.sidebarCollapsed === 'boolean'
+              ? saved.sidebarCollapsed
+              : state.sidebarCollapsed,
         };
         emit();
       } catch {
@@ -65,6 +74,12 @@ function persist() {
 
 export function setAutoSpeak(autoSpeak: boolean) {
   state = { ...state, autoSpeak };
+  emit();
+  persist();
+}
+
+export function setSidebarCollapsed(sidebarCollapsed: boolean) {
+  state = { ...state, sidebarCollapsed };
   emit();
   persist();
 }
@@ -91,6 +106,15 @@ export function useAutoSpeak(): boolean {
     subscribe,
     () => state.autoSpeak,
     () => state.autoSpeak,
+  );
+}
+
+export function useSidebarCollapsed(): boolean {
+  hydrate();
+  return useSyncExternalStore(
+    subscribe,
+    () => state.sidebarCollapsed,
+    () => state.sidebarCollapsed,
   );
 }
 

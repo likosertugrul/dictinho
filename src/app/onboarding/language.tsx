@@ -94,11 +94,11 @@ export default function LanguageOnboarding() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
-      <ScrollView contentContainerClassName="flex-grow px-6 pt-8" showsVerticalScrollIndicator={false}>
-        <Container max={MAX_W.content}>
+      <ScrollView contentContainerClassName="grow px-6 py-8" showsVerticalScrollIndicator={false}>
+        <Container max={MAX_W.content} className="my-auto">
         {step === 1 ? (
           <>
-            <Text className="text-3xl font-bold text-textHi">
+            <Text className={`font-bold text-textHi ${isTablet ? 'text-4xl' : 'text-3xl'}`}>
               What language{'\n'}do you want to learn?
             </Text>
             <Text className="mt-2 text-sm text-textLo">You can change this anytime in settings.</Text>
@@ -106,7 +106,7 @@ export default function LanguageOnboarding() {
           </>
         ) : (
           <>
-            <Text className="text-3xl font-bold text-textHi">
+            <Text className={`font-bold text-textHi ${isTablet ? 'text-4xl' : 'text-3xl'}`}>
               What language{'\n'}do you speak?
             </Text>
             <Text className="mt-2 text-sm text-textLo">

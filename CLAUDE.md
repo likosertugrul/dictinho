@@ -333,6 +333,97 @@ UI dili **İngilizce** (kullanıcı EN→IT öğreniyor); kod/commit İngilizce.
   düğme durumu yok (StylusData = tiltX/tiltY/azimuth/altitude/pressure), uygulamada
   silgi araç çubuğundan. Yeni native build GEREKMEDİ — RNGH zaten dev build'in
   içindeydi, fast refresh ile telefona düştü
+- 🟡 App Store hazırlığı (2026-10-16):
+  • `eas.json` (base/development/simulator/preview/production; `appVersionSource:
+    remote`; `EXPO_PUBLIC_*` build env'i burada — anon key zaten web bundle'ında
+    halka açık, sızıntı değil), `app.json`: `bundleIdentifier
+    com.likosertugrul.dictinho` (İLK GÖNDERİMDEN SONRA DEĞİŞTİRİLEMEZ),
+    `supportsTablet: true`, `usesNonExemptEncryption: false`.
+    `expo-updates` + `expo-dev-client` kuruldu. iPhone dev build'i çalışıyor
+  • **Hesap silme** (Apple 5.1.1(v), olmazsa kesin red): `0021` profiles→auth.users
+    cascade'ini ekledi (YOKTU, `deleteUser()` FK hatası verip sessizce
+    başarısız olurdu), `supabase/functions/delete-account` deploy edildi,
+    Profile'da iki adımlı onay — hem gerçek hesapta hem MİSAFİR hesapta
+    (inceleyici hiç kayıt olmadan Profile'a bakabilir).
+    Canlıya karşı doğrulandı: token'sız → 401; kendi token'ı → `{"deleted":true}`
+    ve 5 tablo + auth kaydı temizlendi; gövdeye BAŞKASININ id'si konunca kurban
+    yaşıyor, çağıranın kendisi siliniyor (fonksiyon id parametresi almıyor)
+  • **Gizlilik politikası**: `src/app/privacy.tsx` (modal) + Settings → About
+    linki; web'de `/privacy`. İçerik kodla doğrulanarak yazıldı (Groq'a yalnız
+    aranan kelime gidiyor, TTS cihazda, analitik/reklam yok)
+  • **İkon**: şablon Expo ikonu atıldı. Yeni set `strokes.ts`'in KENDİ mürekkep
+    motoruyla üretildi (bezier örnekle → basınç profili → `strokePath`), krem
+    sayfa + çizgi + mercan el yazısı "d"; harf kendi sınır kutusuyla ortalanıp
+    tabanı çizgiye oturtuldu. 40px'te okunur. Üretici: headless Chrome
+    screenshot (DİKKAT: SVG'yi hedef piksel boyutunda yaz, yoksa Chrome
+    ölçeklemez KIRPAR). `assets/expo.icon` ve react/expo şablon görselleri silindi
+  KALAN (göndermeden önce): gizlilik sayfasındaki iletişim adresi geçici olarak
+  kullanıcının kişisel gmail'i — ayrı adres alınınca DEĞİŞTİR; iPad yerleşimi
+  simülatörde kontrol edilmedi; ekran görüntüleri; App Store Connect metadata +
+  App Privacy anketi; `eas build --profile production` + `eas submit`
+- ✅ İkon = kullanıcının `assets/images/logo.svg` marka'sı (2026-10-17). Çizim
+  AYNEN korundu; yalnız zorunlu düzeltmeler: dosyaya gömülü squircle
+  (`rx="115"`) kaldırıldı — App Store tam kare + şeffaflıksız ister, yuvarlamayı
+  sistem yapar, yoksa iOS kendi maskesini üstüne uygulayıp ikonu içe çökertir —
+  ve renkler token'lara çekildi (`#FF5E4D`→`#F5654E`, `#12131C`→`#141414`).
+  Set headless Chrome ile üretildi; Android adaptive güvenli bölge 0.44,
+  monochrome beyaz varyant, splash'ta mark tek başına (zemin zaten #141414).
+  NOT: dikmeyi birleştirme önerisi (D'nin ilk okumada çıkması için) kullanıcıya
+  sunuldu, uygulanmadı — tasarım onun
+- ✅ Onboarding dikey hizası (2026-10-17): içerik yukarı yapışıp iPad'de ekranın
+  yarısı boş kalıyordu. `Container`'a `my-auto` verildi, ScrollView
+  `grow px-6 py-8`. `justify-center` KULLANILMADI: içerik ekrandan uzunken
+  web'de üst kısım erişilemez hale geliyor; otomatik margin taşmada kendiliğinden
+  çöküyor. 390×560 taşma testiyle doğrulandı (başlık görünür kalıyor).
+  Tablette başlık text-4xl
+- ✅ iPad modal düzeltmeleri (2026-10-17, iPad Pro 13" simülatöründe ölçülerek):
+  • iPad `presentation:'modal'`'ı **page sheet** olarak açıyor → modal tam ekran
+    değil, arkadaki ekran kenarlardan sızıyordu (defter listesinin "New page"
+    butonu ve tab kenar çubuğu sayfa düzenleyicisinin içinde görünüyordu).
+    `_layout.tsx` artık `useResponsive()` ile tablette `fullScreenModal`,
+    telefonda `modal` veriyor
+  • ARDINDAN çıkan ikinci hata: tam ekran modal içinde
+    `SafeAreaView` (react-native-safe-area-context) **hiç dolgu uygulamıyor**,
+    başlık durum çubuğunun altına giriyordu. Ekrana basarak ölçtüm:
+    `useSafeAreaInsets()` DOĞRU değerleri veriyor (t:32 b:20) ama SafeAreaView
+    onları uygulamıyor. Çözüm: `src/components/screen.tsx` — aynı API
+    (`edges`, `className`), dolguyu hook'tan okuyup kendisi veriyor.
+    TÜM modal ekranlar (word/add, word/[id], srs/index, srs/articles, words,
+    note/[id], privacy) SafeAreaView yerine `Screen` kullanıyor.
+    KURAL: tam ekran modal olan bir ekranda SafeAreaView KULLANMA
+- ✅ iPad yerleşim iyileştirmeleri (2026-10-17): iPad'de hiçbir şey KIRIK değildi
+  ama her ekran 13 inçlik ekranın ortasında telefon genişliğinde dar bir sütundu
+  (ekran görüntüleri zayıf çıkardı). İki hedefli değişiklik:
+  • **Kelime kartı tablette iki sütun** (`word-detail.tsx`, `wide = isTablet &&
+    !embedded`): solda kelimenin NE OLDUĞU (konu, formlar, çekim tablosu),
+    sağda SENİN ona kattığın (notlar, el yazısı, örnek cümleler). Başlık,
+    durum butonları ve "Delete word" tam genişlikte kalıyor. Kapsayıcı tablette
+    `MAX_W.content` → `MAX_W.wide`; başlık kapsayıcısı da AYNI değeri almalı,
+    yoksa başlık gövdeden içeride başlıyor (ilk denemede öyle oldu, düzeltildi).
+    Telefonda hiçbir şey değişmedi
+  • **Flashcard tablette büyüdü** (`srs/index.tsx`): kart `MAX_W.card` →
+    `MAX_W.content`, iç boşluk px-6/py-10 → px-10/py-16, soru ve cevap
+    text-2xl → text-4xl, şıklar/giriş text-lg → text-2xl. `Header` artık
+    `max` prop'u alıyor — yoksa kart genişlerken ilerleme çubuğu dar kalıp
+    hizasız duruyor
+  NOT: flashcard değişikliği simülatörde GÖRSEL olarak doğrulanmadı (oturum
+  açılmadı); kelime kartı iki sütunu doğrulandı
+- ✅ Katlanabilir kenar çubuğu (2026-10-17): geniş ekranlarda (≥1024, iPad dahil)
+  sol menü artık açılıp kapanıyor — açık 240px etiketli, kapalı 72px ikon şeridi.
+  Tercih `settings.ts`'te (`sidebarCollapsed`, AsyncStorage'da kalıcı).
+  Uygulama: `Tabs`'a `tabBar` prop'u verildi → geniş ekranda `components/sidebar.tsx`,
+  telefonda react-navigation'ın kendi `BottomTabBar`'ı (telefon tasarımı hiç
+  değişmesin diye bilerek stock bırakıldı). Navigator çubuğu ekranın YANINA
+  yerleştirdiği için daraltmak genişliği doğrudan içeriğe veriyor — başka hiçbir
+  ekranın bundan haberi olması gerekmiyor. Simülatörde iki hal de doğrulandı
+  (kapalıyken Home'da 3 filtre çipi daha sığıyor)
+- ✅ `/support` sayfası (2026-10-17): App Store Connect gizlilik URL'sinden AYRI
+  bir destek URL'si zorunlu tutuyor, yoktu. `src/app/support.tsx` (modal) +
+  Settings → About altında "Help & support" satırı. İçerik uydurulmadı,
+  uygulamanın gerçek davranışına göre yazıldı (re-check with AI, çekimli form
+  araması, kalem/avuç reddi, seçili kelimelerle pratik, misafir→kalıcı hesap,
+  hesap silme). İletişim adresi geçici: kişisel gmail, docs/APPSTORE.md'de
+  gönderim öncesi değiştirilecekler arasında
 - ⬜ Faz 5: SRS, ⬜ kalan polish: stats ekranı, onboarding
 - ⬜ enrich-word Edge Function — deploy için kullanıcıdan Supabase access token gerekli
 - Not: claude-in-chrome extension bu makinede bağlanmıyor; görsel doğrulama için

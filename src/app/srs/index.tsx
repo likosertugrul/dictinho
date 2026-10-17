@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Screen } from '@/components/screen';
 
 import { ArticleInfo } from '@/components/article-info';
 import { Container } from '@/components/container';
@@ -20,7 +20,7 @@ import { WordCardModal } from '@/components/word-card-modal';
 import { InkCanvas } from '@/components/ink/ink-canvas';
 import { InkPad } from '@/components/ink/ink-pad';
 import { INK_LINE_H, type InkStroke } from '@/components/ink/strokes';
-import { MAX_W } from '@/hooks/use-responsive';
+import { MAX_W, useResponsive } from '@/hooks/use-responsive';
 import { isNearMiss, matchesLemma } from '@/lib/italian';
 import { langInfo, useTargetLang } from '@/lib/lang';
 import { getPickedWords, setPickedWords } from '@/lib/practice-selection';
@@ -175,6 +175,10 @@ export default function SrsScreen() {
   const answerMode = useAnswerMode();
   // Distractors come from everything the user is learning, not just this drill
   const allWords = useRecentWords();
+  // A phone-sized card adrift in a 13" iPad reads as an unfinished layout, so
+  // the card and its type grow with the screen.
+  const { isTablet } = useResponsive();
+  const cardWidth = isTablet ? MAX_W.content : MAX_W.card;
 
   // Local session queue (snapshot of due cards; "Again" re-queues)
   const [queue, setQueue] = useState<DueCard[]>([]);
@@ -369,9 +373,9 @@ export default function SrsScreen() {
   // in between would wipe a drill the user is in the middle of.
   if (due.isLoading || !restored || !built) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-bg">
+      <Screen className="flex-1 items-center justify-center bg-bg">
         <ActivityIndicator color={colors.primary} />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
@@ -381,8 +385,8 @@ export default function SrsScreen() {
     // Nothing left to answer — a stored session for this drill is now stale
     if (resume) clearSession(key);
     return (
-      <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
-        <Header title={sessionTitle} progress={null} />
+      <Screen className="flex-1 bg-bg" edges={['top', 'bottom']}>
+        <Header max={cardWidth} title={sessionTitle} progress={null} />
         <View className="flex-1 items-center justify-center px-8">
           <View className="h-16 w-16 items-center justify-center rounded-full bg-surface">
             <Ionicons name="checkmark-done" size={30} color={colors.pastel.mint} />
@@ -410,7 +414,7 @@ export default function SrsScreen() {
             </Pressable>
           </View>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
@@ -433,11 +437,12 @@ export default function SrsScreen() {
   const shownInk = past ? past.ink : ink.length > 0 ? ink : undefined;
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+    <Screen className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Header
+          max={cardWidth}
           title={
             past
               ? `Earlier · ${pastIndex! + 1} of ${history.length}`
@@ -455,9 +460,12 @@ export default function SrsScreen() {
           contentContainerClassName="grow justify-center px-5 py-2"
           scrollEnabled={!penDown}
           keyboardShouldPersistTaps="handled">
-          <Container max={MAX_W.card}>
+          <Container max={cardWidth}>
           {/* Prompt: meaning in the source language → guess the target word */}
-          <View className="items-center rounded-card bg-surface px-6 py-10">
+          <View
+            className={`items-center rounded-card bg-surface ${
+              isTablet ? 'px-10 py-16' : 'px-6 py-10'
+            }`}>
             {/* Star / add to drill list */}
             <Pressable
               accessibilityLabel={word.flagged ? 'Unstar word' : 'Star for later practice'}
@@ -474,7 +482,10 @@ export default function SrsScreen() {
             <Text className="text-xs font-semibold uppercase tracking-widest text-textLo">
               What’s the {langName} for
             </Text>
-            <Text className="mt-3 text-center text-2xl font-bold text-textHi">
+            <Text
+              className={`mt-3 text-center font-bold text-textHi ${
+                isTablet ? 'text-4xl' : 'text-2xl'
+              }`}>
               {word.translation}
             </Text>
             <View className="mt-2 flex-row items-center gap-1.5">
@@ -532,7 +543,12 @@ export default function SrsScreen() {
                       accessibilityLabel={`Answer ${option}`}
                       onPress={() => pickChoice(option)}
                       className="items-center rounded-2xl bg-surfaceAlt px-4 py-3.5">
-                      <Text className="text-lg font-semibold text-textHi">{option}</Text>
+                      <Text
+                        className={`font-semibold text-textHi ${
+                          isTablet ? 'text-2xl' : 'text-lg'
+                        }`}>
+                        {option}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
@@ -557,7 +573,9 @@ export default function SrsScreen() {
                     autoCorrect={false}
                     autoFocus
                     returnKeyType="done"
-                    className="flex-1 py-3.5 text-center text-lg text-textHi"
+                    className={`flex-1 py-3.5 text-center text-textHi ${
+                      isTablet ? 'text-2xl' : 'text-lg'
+                    }`}
                   />
                   {guess.length > 0 && (
                     <Pressable accessibilityLabel="Clear" hitSlop={8} onPress={() => setGuess('')}>
@@ -615,7 +633,10 @@ export default function SrsScreen() {
                     accessibilityLabel={`Open the card for ${answer}`}
                     onPress={() => setCardOpen(true)}
                     className="flex-row items-center gap-1.5">
-                    <Text className="text-2xl font-bold text-textHi">{answer}</Text>
+                    <Text
+                      className={`font-bold text-textHi ${isTablet ? 'text-4xl' : 'text-2xl'}`}>
+                      {answer}
+                    </Text>
                     <Ionicons name="information-circle-outline" size={18} color={colors.textLo} />
                   </Pressable>
                   <Speaker
@@ -672,7 +693,7 @@ export default function SrsScreen() {
 
         {/* Actions */}
         <View className="px-5 pb-2 pt-2">
-          <Container max={MAX_W.card}>
+          <Container max={cardWidth}>
           {past ? (
             // Looking back: reveal on demand, and step through without rating
             <View className="gap-2">
@@ -813,19 +834,22 @@ export default function SrsScreen() {
 
       {/* Word card over the session (state is kept, so the drill resumes on close) */}
       <WordCardModal wordId={cardOpen ? word.id : null} onClose={() => setCardOpen(false)} />
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 function Header({
   title,
   progress,
+  max,
   onBack,
   onStartOver,
   autoSpeak,
   onToggleAutoSpeak,
 }: {
   title: string;
+  /** Matches the card's width so the two stay aligned on a tablet. */
+  max: number;
   progress: { done: number; total: number } | null;
   /** Step back to the previously answered card; hidden on the first one. */
   onBack?: () => void;
@@ -838,7 +862,7 @@ function Header({
   const pct = progress && progress.total > 0 ? progress.done / progress.total : 0;
   return (
     <View className="px-5 py-3">
-      <Container max={MAX_W.card}>
+      <Container max={max}>
       <View className="flex-row items-center justify-between">
         <View className="flex-1 flex-row items-center gap-2">
           {onBack && (

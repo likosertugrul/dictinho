@@ -1,6 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BottomTabBar } from '@react-navigation/bottom-tabs';
 import { Redirect, Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
+
+import { Sidebar } from '@/components/sidebar';
 
 import { useResponsive } from '@/hooks/use-responsive';
 import { useLangChosen, useLangHydrated } from '@/lib/lang';
@@ -28,28 +31,18 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      // Wide screens get our own sidebar, which can collapse to an icon rail;
+      // phones keep the stock bottom bar, untouched.
+      tabBar={(props) => (isDesktop ? <Sidebar {...props} /> : <BottomTabBar {...props} />)}
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: isDesktop,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textLo,
         tabBarPosition: isDesktop ? 'left' : 'bottom',
-        tabBarVariant: isDesktop ? 'material' : 'uikit',
-        tabBarLabelPosition: isDesktop ? 'beside-icon' : undefined,
-        tabBarStyle: isDesktop
-          ? {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              // Both, because the navigator's own minWidth is 25% of the
-              // window — far too wide on a large monitor.
-              width: 240,
-              minWidth: 240,
-            }
-          : {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
-            },
-        tabBarLabelStyle: isDesktop ? { fontSize: 14, fontWeight: '600' } : undefined,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
       }}>
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: tabIcon('home') }} />
       <Tabs.Screen name="stats" options={{ title: 'Practice', tabBarIcon: tabIcon('albums-outline') }} />

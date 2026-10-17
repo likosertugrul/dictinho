@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Screen } from '@/components/screen';
 
 import { Container } from '@/components/container';
 import { useEnrichWord } from '@/hooks/use-enrich-word';
@@ -375,7 +375,7 @@ export default function AddWordScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+    <Screen className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -1057,6 +1057,6 @@ export default function AddWordScreen() {
           </Container>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </Screen>
   );
 }

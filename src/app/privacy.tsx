@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Screen } from '@/components/screen';
 
 import { Container } from '@/components/container';
 import { MAX_W } from '@/hooks/use-responsive';
@@ -15,7 +15,12 @@ import { colors } from '@/theme/tokens';
  * starts collecting something new, this page changes in the same commit.
  */
 const UPDATED = 'October 2026';
-const CONTACT = 'privacy@dictinho.app';
+// TODO before submitting to the App Store: swap this for the dedicated
+// address. A personal inbox is fine while testing, but it goes on a public
+// page and Apple may write to it during review.
+const CONTACT = 'likosertugrul128@gmail.com';
+// TODO: GDPR wants the controller named, not just an inbox.
+const CONTROLLER = 'the developer of Dictinho';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -41,7 +46,7 @@ function Bullet({ children }: { children: React.ReactNode }) {
 
 export default function PrivacyScreen() {
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+    <Screen className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <View className="flex-row items-center gap-2 px-5 py-3">
         <Pressable
           accessibilityLabel="Close"
@@ -82,11 +87,34 @@ export default function PrivacyScreen() {
             </Bullet>
           </Section>
 
-          <Section title="Where it is stored">
+          <Section title="Where it is stored, and who else touches it">
             <P>
               Account and learning data are stored with Supabase, which hosts the database and
-              authentication on Amazon Web Services. Access is restricted per account at the
-              database level, so one account cannot read another&apos;s data.
+              authentication on Amazon Web Services. The servers are in the United States, so if
+              you are in the UK or the EU your data is transferred there under the standard
+              contractual clauses in Supabase&apos;s data processing agreement.
+            </P>
+            <P>Three companies process data on our behalf, and no one else:</P>
+            <Bullet>
+              <Text className="font-semibold text-textHi">Supabase</Text> (on Amazon Web Services)
+              — the database and your sign-in.
+            </Bullet>
+            <Bullet>
+              <Text className="font-semibold text-textHi">Groq</Text>, and{' '}
+              <Text className="font-semibold text-textHi">Anthropic</Text> as a fallback — working
+              out a word the dictionary doesn&apos;t have yet. See below.
+            </Bullet>
+            <P>
+              Access is restricted per account at the database level, so one account cannot read
+              another&apos;s data.
+            </P>
+          </Section>
+
+          <Section title="How long it is kept">
+            <P>
+              Your account and everything in it are kept until you delete them. There is no
+              scheduled clear-out and no archive: deleting your account removes the data straight
+              away and permanently, not after a waiting period.
             </P>
           </Section>
 
@@ -99,12 +127,27 @@ export default function PrivacyScreen() {
               the app&apos;s shared dictionary so the next person who looks it up gets an instant
               answer.
             </P>
+            <P>
+              Groq is contractually barred from using what it is sent to train or fine-tune any
+              model, and does not keep it after answering, beyond short-lived logs for
+              troubleshooting and abuse monitoring.
+            </P>
           </Section>
 
           <Section title="Pronunciation">
             <P>
               Reading answers out loud uses the speech engine built into your device. Nothing is
               sent anywhere for this.
+            </P>
+          </Section>
+
+          <Section title="Your rights">
+            <P>
+              You can ask for a copy of your data, ask for it to be corrected, ask for it to be
+              deleted, or object to it being processed at all. Deletion you can do yourself, in
+              the app, at any time — see below. For anything else, write to {CONTACT} and you will
+              have an answer within 30 days. If you think your data has been handled badly, you
+              can also complain to your country&apos;s data protection authority.
             </P>
           </Section>
 
@@ -131,11 +174,14 @@ export default function PrivacyScreen() {
             </P>
           </Section>
 
-          <Section title="Contact">
-            <P>Questions about this policy or your data: {CONTACT}</P>
+          <Section title="Who is responsible">
+            <P>
+              The data controller is {CONTROLLER}. Questions about this policy or your data:{' '}
+              {CONTACT}
+            </P>
           </Section>
         </Container>
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   );
 }

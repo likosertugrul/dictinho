@@ -87,13 +87,22 @@ export default function SettingsScreen() {
           </View>
 
           <Text className="mb-2 mt-6 text-sm font-semibold text-textLo">About</Text>
-          <Pressable
-            accessibilityLabel="Read the privacy policy"
-            onPress={() => router.push('/privacy')}
-            className="flex-row items-center justify-between rounded-card bg-surface px-4 py-3">
-            <Text className="text-sm font-semibold text-textHi">Privacy policy</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.textLo} />
-          </Pressable>
+          <View className="overflow-hidden rounded-card bg-surface">
+            <Pressable
+              accessibilityLabel="Read the privacy policy"
+              onPress={() => router.push('/privacy')}
+              className="flex-row items-center justify-between px-4 py-3">
+              <Text className="text-sm font-semibold text-textHi">Privacy policy</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textLo} />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Get help"
+              onPress={() => router.push('/support')}
+              className="flex-row items-center justify-between border-t border-border px-4 py-3">
+              <Text className="text-sm font-semibold text-textHi">Help &amp; support</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textLo} />
+            </Pressable>
+          </View>
         </Container>
       </ScrollView>
     </SafeAreaView>

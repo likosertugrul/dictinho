@@ -15,7 +15,7 @@ import { ArticleInfo } from '@/components/article-info';
 import { Container } from '@/components/container';
 import { WordInk } from '@/components/ink/word-ink';
 import { Speaker } from '@/components/speaker';
-import { MAX_W } from '@/hooks/use-responsive';
+import { MAX_W, useResponsive } from '@/hooks/use-responsive';
 import { adjectiveForms } from '@/lib/inflect';
 import {
   PERSON_LABELS,
@@ -157,6 +157,10 @@ export function WordDetail({
   }, [word.data]);
   const notesDirty = word.data != null && notesDraft !== (word.data.notes ?? '');
 
+  // Two columns only once there is room for both to stay readable.
+  const { isTablet } = useResponsive();
+  const wide = isTablet && !embedded;
+
   // A stylus drawing across the pad must not scroll the card underneath it.
   const [penDown, setPenDown] = useState(false);
 
@@ -192,7 +196,7 @@ export function WordDetail({
     <View className="flex-1 bg-bg">
       {/* Header */}
       <View className="px-5 py-3">
-        <Container max={MAX_W.content}>
+        <Container max={wide ? MAX_W.wide : MAX_W.content}>
         <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-3">
           <View className="flex-row items-center gap-2">
@@ -244,7 +248,7 @@ export function WordDetail({
           contentContainerClassName="px-5 pb-8"
           scrollEnabled={!penDown}
           keyboardShouldPersistTaps="handled">
-          <Container max={MAX_W.content}>
+          <Container max={wide ? MAX_W.wide : MAX_W.content}>
           {/* Move between lists */}
           <View className="mt-1 flex-row gap-2">
             {(
@@ -270,6 +274,14 @@ export function WordDetail({
             })}
           </View>
 
+          {/*
+            On a tablet the card is two columns: what the word IS on the left
+            (topic, forms, conjugations) and what YOU put on it on the right
+            (notes, handwriting, examples). On a phone it stays one column in
+            the same order.
+          */}
+          <View className={wide ? 'mt-2 flex-row items-start gap-6' : ''}>
+            <View className={wide ? 'flex-1' : ''}>
           {/* Topic — the theme bucket this word is filed under */}
           <View className="mt-4">
             <View className="mb-2 flex-row items-center justify-between">
@@ -488,6 +500,8 @@ export function WordDetail({
             </View>
           )}
 
+            </View>
+            <View className={wide ? 'flex-1' : ''}>
           {/* Notes — editable */}
           <View className="mt-6">
             <Text className="mb-2 text-lg font-bold text-textHi">Notes</Text>
@@ -552,6 +566,8 @@ export function WordDetail({
               </View>
             </View>
           )}
+            </View>
+          </View>
 
           {/* Delete word — two-step inline confirm (works on web too).
               Hidden while practicing: deleting the card under review breaks the session. */}

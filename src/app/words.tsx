@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Screen } from '@/components/screen';
 
 import { Container } from '@/components/container';
 import { WordList } from '@/components/word-list';
@@ -114,7 +114,7 @@ export default function WordsScreen() {
   }, [baseWords, activePos, activeTopic, q, sortKey, sortDir]);
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+    <Screen className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <Container>
       {/* Header */}
       <View className="flex-row items-center justify-between px-5 py-3">
@@ -311,6 +311,6 @@ export default function WordsScreen() {
           </Container>
         </View>
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }

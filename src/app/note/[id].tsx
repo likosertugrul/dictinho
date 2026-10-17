@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Screen } from '@/components/screen';
 
 import { InkCanvas, type InkTool } from '@/components/ink/ink-canvas';
 import { INK_DEFAULT_COLOR, INK_DEFAULT_WIDTH, InkToolbar } from '@/components/ink/ink-pad';
@@ -132,15 +132,15 @@ export default function NotePageScreen() {
 
   if (page.isPending) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-bg" edges={['top', 'bottom']}>
+      <Screen className="flex-1 items-center justify-center bg-bg">
         <ActivityIndicator color={colors.primary} />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   if (!page.data) {
     return (
-      <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+      <Screen className="flex-1 bg-bg">
         <View className="flex-1 items-center justify-center px-8">
           <Ionicons name="document-outline" size={28} color={colors.textLo} />
           <Text className="mt-3 text-center text-base font-bold text-textHi">
@@ -156,14 +156,14 @@ export default function NotePageScreen() {
             <Text className="text-sm font-bold text-white">Back to notebook</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   const writeError = savePage.error?.message ?? renamePage.error?.message ?? null;
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+    <Screen className="flex-1 bg-bg">
       {/* Header: title is editable in place — a page is named by what's on it */}
       <View className="flex-row items-center gap-2 px-4 py-3">
         <Pressable
@@ -393,6 +393,6 @@ export default function NotePageScreen() {
           )}
         </Overlay>
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
